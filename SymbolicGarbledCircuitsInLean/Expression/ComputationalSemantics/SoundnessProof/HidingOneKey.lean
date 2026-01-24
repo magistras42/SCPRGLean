@@ -465,3 +465,87 @@ theorem symbolicToSemanticIndistinguishabilityHidingOneKey
     rw [<-reductionToOracleEq2 key₀] <;> try assumption
     apply IndistinguishabilityByReduction <;> try assumption
     apply Hreduction
+
+/-
+We now discuss the complexity of `reductionHidingOneKey`, in order to justify the second axiom
+of the polynomial-time predicate `PolyFamOracleCompPred`.
+
+Although it is intuitively clear that `reductionHidingOneKey` runs in polynomial time, this
+construction is the weakest link of our proof, so we provide a formal pen-and-paper
+complexity analysis.
+
+Fix an encryption scheme `enc` that runs in polynomial time. (Note that polynomial-time
+encryption does not formally follow from IND-CPA security, but it is a standard assumption
+in cryptography, since exponential-time encryption schemes are not practically useful.)
+
+Concretely, assume that `enc` encrypts a message of length n using a key of length κ in time
+bounded by p(n + κ), for some polynomial p.
+
+We show that for every fixed expression `e` (and removed key `key₀`), the computation
+`reductionHidingOneKey` runs in time polynomial in κ.
+
+The definition of `reductionHidingOneKey` consists of three parts:
+
+• Draw at most |e| random bits.
+  This can be done in |e| coin tosses, i.e., in constant time with respect to κ.
+
+• Draw at most |e| random keys.
+  This can be done in |e| · κ coin tosses, i.e., in linear time with respect to κ.
+
+• Run `reductionToOracle`.
+
+The first two steps are clearly polynomial in κ, so it remains to analyze the third step.
+We start by analyzing the length of the bit vector produced by `reductionToOracle`.
+
+Lemma (length of our reduction):
+For a fixed expression e, the length of `reductionHidingOneKey e` is polynomial in κ.
+
+Proof.
+
+The length of the bit vector produced by `reductionToOracle` depends only on the shape of e
+(similarly to `evalExpr`). We prove the claim by induction on the shape of e.
+
+• Base cases: s = 𝔹 and s = 𝕂.
+  The produced lengths are 1 and κ, respectively, both polynomial in κ.
+
+• Pair case: s = (s₁, s₂).
+  The resulting length is the sum of the lengths produced by s₁ and s₂.
+  By the induction hypothesis, both are polynomial in κ, hence so is their sum.
+
+• Encryption case: s = EncS s′.
+  Since encrypt(k, n) runs in time p(n + κ), its output length is also bounded by p(n + κ).
+
+  Here n is the length of the bit vector produced by s′, which by the induction hypothesis
+  is bounded by q(κ) for some polynomial q.
+
+  Therefore, the final output length is bounded by p(q(κ) + κ), which is polynomial in κ.
+
+This concludes the proof.
+
+Now consider the running time of `reductionToOracle`.
+
+Each step of `reductionToOracle` runs in time bounded by p(n + κ), where n is the length of
+the intermediate result, because encryption is the most expensive operation (all other
+operations run in linear time).
+
+Since all intermediate lengths are bounded by the length of the final output, each step
+runs in time at most p(q(κ) + κ).
+
+Moreover, there are at most |e| such steps.
+
+Therefore, the total running time of `reductionToOracle` is bounded by
+
+  |e| · p(q(κ) + κ),
+
+which is polynomial in κ.
+
+This concludes the proof that `reductionHidingOneKey` runs in polynomial time for every
+fixed expression e.
+
+Finally, note that the exponent of the polynomial running time may depend on |e|, which is
+harmless since e is fixed.
+
+However, if we additionally assume (as is common in practice) that the encryption scheme
+produces outputs of length polynomial in κ + n, then the exponent becomes independent of |e|
+and equal to the degree of p.
+-/

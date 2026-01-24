@@ -87,6 +87,31 @@ def famOracleComp {I : Type} (Spec : ℕ -> OracleSpec I) (Output : ℕ -> Type)
 def negl (f : ℕ -> NNReal) : Prop :=
   ∀ k, ∃ (B : ℝ), ∀ i, (f i) * (i^k) <= B
 
+-- We use a slightly non-standard definition of negligible function (to avoid additional quantifiers),
+-- so we briefly explain its equivalence with the standard one.
+--
+-- Standard (cryptographic) definition:
+--   ∀ k : ℕ, ∃ N : ℕ, ∀ n ≥ N, f n * n^k ≤ 1
+--
+-- Let us now show two implications:
+--
+-- (Standard ⇒ our bounded form)
+-- Assume: ∀ k, ∃ N, ∀ n ≥ N, f n * n^k ≤ 1.
+-- Fix k and obtain N from the assumption. Define B as maximum of f n * n^k for n ∈ {0, ..., N}, but at least 1.
+-- Then for `n ≥ N` we have `f n * n^k ≤ 1 ≤ B`, and for `n < N` we have
+-- `f n * n^k ≤ max_{0 ≤ m < N} f m * m^k ≤ B`.
+--
+-- (Our bounded form ⇒ standard)
+-- Assume our definition:
+--   ∀ k : ℕ, ∃ B : ℝ, ∀ n : ℕ, f n * n^k ≤ B.
+-- Fix k. Apply the assumption to `k+1` to obtain `B` such that
+--   ∀ n, f n * n^(k+1) ≤ B.
+-- It follows that:
+--   ∀ n, f n * n^k ≤ B / n.
+-- Let N be larger than B.
+-- Then for any `n ≥ N` we have `n ≥ B`. It follows that
+--   f n * n^k ≤ B / n ≤ 1.
+
 -- On the other hand we do not want to define polynomial time directly, but rather abstractly as a predicate
 -- on a family of oracle computations. Later we will axiomatize, some properties that we need in our proof.
 

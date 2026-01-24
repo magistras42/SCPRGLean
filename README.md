@@ -6,7 +6,7 @@ This repository accompanies the paper:
 
 > *Computationally-Sound Symbolic Cryptography in Lean*  
 > S. Dziembowski, G. Fabiański, D. Micciancio, and R. Stefański  
-> (under submission; a preprint will be available on the IACR ePrint archive soon)
+> (under submission; a preprint available at [Cryptology ePrint Archive](https://eprint.iacr.org/2025/1700))
 
 We recommend reading the paper as it provides the high-level overview and the intuition behind the formalization.
 
