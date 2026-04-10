@@ -1,5 +1,7 @@
-import SymbolicGarbledCircuitsInLean.Expression.Defs
-import SymbolicGarbledCircuitsInLean.Expression.SymbolicIndistinguishability
+import PRGExtension.Expression.Defs
+import PRGExtension.Expression.SymbolicIndistinguishability
+
+namespace PRG
 
 def lengthOfBit : BitExpr -> Nat
 | BitExpr.Not x =>

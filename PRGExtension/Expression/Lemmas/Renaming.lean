@@ -1,6 +1,8 @@
-import SymbolicGarbledCircuitsInLean.Expression.Defs
-import SymbolicGarbledCircuitsInLean.Expression.SymbolicIndistinguishability
+import PRGExtension.Expression.Defs
+import PRGExtension.Expression.SymbolicIndistinguishability
 
+
+namespace PRG
 
 lemma normalize_renameK_commute (p : Expression s) (f : KeyRenaming) :
   normalizeExpr (applyKeyRenamingP f p) = applyKeyRenamingP f (normalizeExpr p) := by

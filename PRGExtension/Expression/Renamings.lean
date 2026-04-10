@@ -1,7 +1,9 @@
-import SymbolicGarbledCircuitsInLean.Expression.Defs
-import SymbolicGarbledCircuitsInLean.Expression.SymbolicIndistinguishability
+import PRGExtension.Expression.Defs
+import PRGExtension.Expression.SymbolicIndistinguishability
 
 --  This file defines renamings of boolean and key variables.
+
+namespace PRG
 
 def bitPerm (f : ℕ -> Bool) (x : ℕ) : VarOrNegVar :=
   if f x then VarOrNegVar.NegVar x else VarOrNegVar.Var x

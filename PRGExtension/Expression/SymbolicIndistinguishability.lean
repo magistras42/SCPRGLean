@@ -164,9 +164,6 @@ def hideEncrypted {s : Shape} (keys : Finset (Expression Shape.KeyS)) (p : Expre
     if k ∈ keys
     then Expression.Enc k (hideEncrypted keys e)
     else  Expression.Hidden k
-  -- Recurse into PRG seeds in case they contain encryptions
-  | Expression.G0 e => Expression.G0 (hideEncrypted keys e)
-  | Expression.G1 e => Expression.G1 (hideEncrypted keys e)
   | p => p
 
 -- Next, we define a function that only extracts those keys that are actually present in the expression
@@ -247,12 +244,8 @@ lemma hideEncryptedMonotone {s : Shape} (keys1 keys2 : Finset (Expression Shape.
       exact ih_e
     · simp [hk1, ExpressionInclusion]
       by_cases hk2 : k ∈ keys2 <;> simp [hk2, ExpressionInclusion]
-  case G0 e ih =>
-    -- simp only [ExpressionInclusion] at ih
-    -- Translate ih into a strict equality
-    exact ih
-  case G1 e ih =>
-    exact ih
+  case G0 e => exact ExpressionInclusionRfl _
+  case G1 e => exact ExpressionInclusionRfl _
 
 lemma eq_of_ExpressionInclusion_key : ∀ (k1 k2 : Expression 𝕂), ExpressionInclusion k1 k2 = true → k1 = k2
   | Expression.VarK id, k2, h => by
@@ -320,6 +313,8 @@ lemma hideEncryptedSmallerValue {s : Shape} (keys : Finset (Expression Shape.Key
   case Enc s ek e ih1 ih2 =>
     split <;> try simp [ExpressionInclusion, hideEncrypted]
     assumption
+  case G0 e => exact ExpressionInclusionRfl _
+  case G1 e => exact ExpressionInclusionRfl _
 
 -- Lemma 1: The universe of keys extracted from a smaller expression is a subset
 -- of the universe extracted from a larger expression.
