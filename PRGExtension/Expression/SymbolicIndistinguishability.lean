@@ -59,6 +59,10 @@ def applyKeyRenamingP {s : Shape} (r : KeyRenaming) (e : Expression s) : Express
   | Expression.Perm b e1 e2 => Expression.Perm b (applyKeyRenamingP r e1) (applyKeyRenamingP r e2)
   | Expression.Enc e1 e2 => Expression.Enc (applyKeyRenamingP r e1) (applyKeyRenamingP r e2)
   | Expression.Hidden e => Expression.Hidden (applyKeyRenamingP r e)
+  | Expression.G0 e => Expression.G0 (applyKeyRenamingP r e)
+  | Expression.G1 e => Expression.G1 (applyKeyRenamingP r e)
+  | Expression.HiddenG0 e => Expression.HiddenG0 (applyKeyRenamingP r e)
+  | Expression.HiddenG1 e => Expression.HiddenG1 (applyKeyRenamingP r e)
   | e => e
 
 -- Next, we define bit-variable, which is a bit complicated.
@@ -132,6 +136,8 @@ def keySubterms {s : Shape} (p : Expression s) : Finset (Expression Shape.KeyS) 
   | Expression.Perm _ p1 p2 => keySubterms p1 ∪ keySubterms p2
   | Expression.Enc k e => keySubterms k ∪ keySubterms e
   | Expression.Hidden k => keySubterms k
+  | Expression.HiddenG0 k => keySubterms k
+  | Expression.HiddenG1 k => keySubterms k
   | _ => ∅
 
 -- Lean doesn't like anonymous match statements inside lambdas,
@@ -164,6 +170,14 @@ def hideEncrypted {s : Shape} (keys : Finset (Expression Shape.KeyS)) (p : Expre
     if k ∈ keys
     then Expression.Enc k (hideEncrypted keys e)
     else  Expression.Hidden k
+  | Expression.G0 k =>
+    if k ∈ keys
+    then Expression.G0 k
+    else Expression.HiddenG0 k
+  | Expression.G1 k =>
+    if k ∈ keys
+    then Expression.G1 k
+    else Expression.HiddenG1 k
   | p => p
 
 -- Next, we define a function that only extracts those keys that are actually present in the expression
@@ -179,6 +193,8 @@ def extractKeys {s : Shape} (p : Expression s) : Finset (Expression Shape.KeyS) 
   -- The adversary learns the PRG output, but cannot extract the underlying seed
   | Expression.G0 e => {Expression.G0 e}
   | Expression.G1 e => {Expression.G1 e}
+  | Expression.HiddenG0 _ => ∅
+  | Expression.HiddenG1 _ => ∅
   | _ => ∅
 
 -- Next, we define the 'key recovery operator (𝓕ₑ from the paper), that given a set of keys,
@@ -215,10 +231,15 @@ def ExpressionInclusion :  {s : Shape} -> (p1 : Expression s) -> (p2 : Expressio
 | .(_), Expression.Hidden k, Expression.Hidden k' => k == k'
 | .(_), Expression.Enc k e, Expression.Enc k' e' => k == k' ∧ ExpressionInclusion e e'
 | .(_), Expression.Hidden k, Expression.Enc k' _ => k == k'
--- | .(_), Expression.G0 e1, Expression.G0 e2 => e1 == e2
--- | .(_), Expression.G1 e1, Expression.G1 e2 => e1 == e2
-| .(_), Expression.G0 e1, Expression.G0 e2 => ExpressionInclusion e1 e2
-| .(_), Expression.G1 e1, Expression.G1 e2 => ExpressionInclusion e1 e2
+-- undo if this breaks anything
+| .(_), Expression.G0 k1, Expression.G0 k2 => k1 == k2
+| .(_), Expression.G1 k1, Expression.G1 k2 => k1 == k2
+-- A redacted PRG is included in a real PRG if their underlying seeds match
+| .(_), Expression.HiddenG0 k1, Expression.G0 k2 => k1 == k2
+| .(_), Expression.HiddenG1 k1, Expression.G1 k2 => k1 == k2
+  -- A redacted PRG is included in another redacted PRG if the seeds match
+| .(_), Expression.HiddenG0 k1, Expression.HiddenG0 k2 => k1 == k2
+| .(_), Expression.HiddenG1 k1, Expression.HiddenG1 k2 => k1 == k2
 | .(_), _, _ => false
 
 notation  p1 "⊆" p2 => (ExpressionInclusion p1 p2)
@@ -244,21 +265,43 @@ lemma hideEncryptedMonotone {s : Shape} (keys1 keys2 : Finset (Expression Shape.
       exact ih_e
     · simp [hk1, ExpressionInclusion]
       by_cases hk2 : k ∈ keys2 <;> simp [hk2, ExpressionInclusion]
-  case G0 e => exact ExpressionInclusionRfl _
-  case G1 e => exact ExpressionInclusionRfl _
+  case G0 k =>
+    split <;> rename_i h1
+    · split <;> rename_i h2
+      · exact ExpressionInclusionRfl _
+      · -- The impossible branch: k ∈ keys1 but k ∉ keys2
+        -- 'h h1' proves k ∈ keys2. 'h2' takes that and produces False!
+        exact False.elim (h2 (h h1))
+    · split <;> rename_i h2
+      · -- HiddenG0 k ⊆ G0 k
+        simp [ExpressionInclusion]
+      · -- HiddenG0 k ⊆ HiddenG0 k
+        exact ExpressionInclusionRfl _
+  case G1 k =>
+    split <;> rename_i h1
+    · split <;> rename_i h2
+      · exact ExpressionInclusionRfl _
+      · -- The impossible branch:
+        exact False.elim (h2 (h h1))
+    · split <;> rename_i h2
+      · -- HiddenG1 k ⊆ G1 k
+        simp [ExpressionInclusion]
+      · -- HiddenG1 k ⊆ HiddenG1 k
+        exact ExpressionInclusionRfl _
 
-lemma eq_of_ExpressionInclusion_key : ∀ (k1 k2 : Expression 𝕂), ExpressionInclusion k1 k2 = true → k1 = k2
-  | Expression.VarK id, k2, h => by
-      cases k2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
-      exact congrArg _ (eq_of_beq h)
+-- No longer mathematically true - updated key eq defs
+-- lemma eq_of_ExpressionInclusion_key : ∀ (k1 k2 : Expression 𝕂), ExpressionInclusion k1 k2 = true → k1 = k2
+--   | Expression.VarK id, k2, h => by
+--       cases k2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
+--       exact congrArg _ (eq_of_beq h)
 
-  | Expression.G0 e, k2, h => by
-      cases k2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
-      exact congrArg _ (eq_of_ExpressionInclusion_key e _ h)
+--   | Expression.G0 e, k2, h => by
+--       cases k2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
+--       exact congrArg _ (eq_of_ExpressionInclusion_key e _ h)
 
-  | Expression.G1 e, k2, h => by
-      cases k2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
-      exact congrArg _ (eq_of_ExpressionInclusion_key e _ h)
+--   | Expression.G1 e, k2, h => by
+--       cases k2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
+--       exact congrArg _ (eq_of_ExpressionInclusion_key e _ h)
 
 lemma keyPartsMonotone {s : Shape} (p1 p2 : Expression s) (h : p1 ⊆ p2) :
   extractKeys p1 ⊆ extractKeys p2 := by
@@ -289,13 +332,21 @@ lemma keyPartsMonotone {s : Shape} (p1 p2 : Expression s) (h : p1 ⊆ p2) :
       · simp [extractKeys]
   | G0 e ih_e =>
       cases p2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
-      simp only [extractKeys]
-      rw [Finset.singleton_subset_singleton]
-      rw [eq_of_ExpressionInclusion_key e _ h]
+      have heq : e = _ := eq_of_beq h
+      subst heq
+      simp [extractKeys]
   | G1 e ih =>
       cases p2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
+      have heq : e = _ := eq_of_beq h
+      subst heq
       simp [extractKeys]
-      rw [eq_of_ExpressionInclusion_key e _ h]
+  | HiddenG0 k =>
+      cases p2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
+      -- extractKeys of a HiddenG0 is empty, so it's a trivial subset of anything
+      all_goals simp [extractKeys]
+  | HiddenG1 k =>
+      cases p2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
+      all_goals simp [extractKeys]
   | Perm z e1 e2 ih_z ih_e1 ih_e2 =>
       cases p2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
       -- The logical AND evaluates e1, then e2, then z
@@ -313,8 +364,18 @@ lemma hideEncryptedSmallerValue {s : Shape} (keys : Finset (Expression Shape.Key
   case Enc s ek e ih1 ih2 =>
     split <;> try simp [ExpressionInclusion, hideEncrypted]
     assumption
-  case G0 e => exact ExpressionInclusionRfl _
-  case G1 e => exact ExpressionInclusionRfl _
+  case G0 k =>
+    split
+    · -- Branch 1 (True): G0 k ⊆ G0 k
+      exact ExpressionInclusionRfl _
+    · -- Branch 2 (False): HiddenG0 k ⊆ G0 k
+      simp [ExpressionInclusion]
+  case G1 k =>
+    split
+    · -- Branch 1 (True): G1 k ⊆ G1 k
+      exact ExpressionInclusionRfl _
+    · -- Branch 2 (False): HiddenG1 k ⊆ G1 k
+      simp [ExpressionInclusion]
 
 -- Lemma 1: The universe of keys extracted from a smaller expression is a subset
 -- of the universe extracted from a larger expression.
@@ -353,16 +414,31 @@ lemma keySubtermsMonotone {s : Shape} (p1 p2 : Expression s) (h : p1 ⊆ p2) :
         exact Finset.Subset.refl _
   | G0 e ih_e =>
       cases p2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
-      simp [keySubterms]
-      have heq := eq_of_ExpressionInclusion_key e _ h
+      have heq : e = _ := eq_of_beq h
       subst heq
-      exact Finset.Subset.refl _
+      simp [keySubterms]
   | G1 e ih_e =>
       cases p2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
-      simp [keySubterms]
-      have heq := eq_of_ExpressionInclusion_key e _ h
+      have heq : e = _ := eq_of_beq h
       subst heq
-      exact Finset.Subset.refl _
+      simp [keySubterms]
+  | HiddenG0 k =>
+      cases p2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
+      -- Handles both the case where p2 is G0 and p2 is HiddenG0
+      all_goals
+        have heq : k = _ := eq_of_beq h
+        subst heq
+        simp [keySubterms]
+        try apply Finset.subset_union_left
+        try apply Finset.subset_insert
+  | HiddenG1 k =>
+      cases p2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
+      all_goals
+        have heq : k = _ := eq_of_beq h
+        subst heq
+        simp [keySubterms]
+        try apply Finset.subset_union_left
+        try apply Finset.subset_insert
   | Perm z e1 e2 ih_z ih_e1 ih_e2 =>
       cases p2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
       have ⟨he1_incl, he2_incl, _hz_incl⟩ := of_decide_eq_true h
@@ -393,6 +469,10 @@ lemma extractKeys_subset_keySubterms {s : Shape} (p : Expression s) :
   | G0 e ih =>
       simp [extractKeys, keySubterms]
   | G1 e ih =>
+      simp [extractKeys, keySubterms]
+  | HiddenG0 k =>
+      simp [extractKeys, keySubterms]
+  | HiddenG1 k =>
       simp [extractKeys, keySubterms]
   | Perm z e1 e2 ih_z ih_e1 ih_e2 =>
       simp [extractKeys, keySubterms]

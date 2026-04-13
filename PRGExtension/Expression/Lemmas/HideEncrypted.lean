@@ -14,6 +14,16 @@ def hideEncryptedS {s : Shape} (keys : Set (Expression Shape.KeyS)) (p : Express
     if k ∈ keys
     then Expression.Enc k (hideEncryptedS keys e)
     else  Expression.Hidden k
+  | Expression.G0 k =>
+    open Classical in
+    if k ∈ keys
+    then Expression.G0 k
+    else Expression.HiddenG0 k
+  | Expression.G1 k =>
+    open Classical in
+    if k ∈ keys
+    then Expression.G1 k
+    else Expression.HiddenG1 k
   | p => p
 
 noncomputable
@@ -30,16 +40,22 @@ lemma emptyHide {s : Shape} (p : Expression s) : hideSelectedS ∅ p = p := by
 def allParts {s : Shape} (p : Expression s) : Finset (Expression Shape.KeyS) :=
   match p with
   | Expression.VarK e => {Expression.VarK e}
-  | Expression.G0 e => {Expression.G0 e}
-  | Expression.G1 e => {Expression.G1 e}
+  | Expression.G0 e => {Expression.G0 e} ∪ allParts e
+  | Expression.G1 e => {Expression.G1 e} ∪ allParts e
   | Expression.Pair p1 p2 => (allParts p1) ∪ (allParts p2)
   | Expression.Perm _ p1 p2 => (allParts p1) ∪ (allParts p2)
   | Expression.Enc x e => (allParts e) ∪ allParts x
   | Expression.Hidden _ => {}
+  | Expression.HiddenG0 e => {Expression.HiddenG0 e}
+  | Expression.HiddenG1 e => {Expression.HiddenG1 e}
   | _ => {}
 
-def allPartsKEq (p :  Expression Shape.KeyS) :
-  allParts p = {p} := by
+-- obsolete because keys are recursive due to PRG trees
+-- def allPartsKEq (p :  Expression Shape.KeyS) :
+--   allParts p = {p} := by
+--   cases p <;> simp [allParts]
+
+lemma self_in_allParts (p : Expression Shape.KeyS) : p ∈ allParts p := by
   cases p <;> simp [allParts]
 
 lemma hideEncryptedEqS {s : Shape} (keys : Finset (Expression Shape.KeyS)) (p : Expression s) :
@@ -65,11 +81,38 @@ lemma hideEncryptedUnivAux {s : Shape} (keys Z : Set (Expression Shape.KeyS)) (p
       rw [ih2]
       assumption
       constructor <;> try assumption
-      simp [allPartsKEq] at h₂
-      assumption
+      exact h₂ (self_in_allParts e1)
     next hn =>
       rw [ite_cond_eq_false] ; simp
       tauto
+  case G0 k ih =>
+    intro hZ
+    have hk_in_Z : k ∈ Z := by
+      apply hZ
+      simp [allParts]
+      exact Or.inr (self_in_allParts k)
+
+    -- Bypass `simp` struggling with `ite` conditions by using explicit branching:
+    by_cases h_keys : k ∈ keys
+    · -- True branch: we know k ∈ keys, and we know k ∈ Z.
+      have h_inter : k ∈ keys ∩ Z := ⟨h_keys, hk_in_Z⟩
+      simp [h_keys, h_inter]
+    · -- False branch: we know k ∉ keys. Thus it cannot be in the intersection.
+      have h_not_inter : ¬ (k ∈ keys ∩ Z) := fun h_contra => h_keys h_contra.1
+      simp [h_keys, h_not_inter]
+
+  case G1 k ih =>
+    intro hZ
+    have hk_in_Z : k ∈ Z := by
+      apply hZ
+      simp [allParts]
+      exact Or.inr (self_in_allParts k)
+
+    by_cases h_keys : k ∈ keys
+    · have h_inter : k ∈ keys ∩ Z := ⟨h_keys, hk_in_Z⟩
+      simp [h_keys, h_inter]
+    · have h_not_inter : ¬ (k ∈ keys ∩ Z) := fun h_contra => h_keys h_contra.1
+      simp [h_keys, h_not_inter]
 
 lemma hideEncryptedUniv {s : Shape} (keys : Set (Expression Shape.KeyS)) (p : Expression s) :
   hideEncryptedS  (keys ∩ allParts p) p = hideEncryptedS keys p := by
@@ -119,8 +162,21 @@ lemma hideEncryptedSSmallerValue {s : Shape} (keys : Set (Expression Shape.KeyS)
   case Enc k p hp =>
     rw [apply_ite ExpressionInclusion]
     split <;> simp [ExpressionInclusion, hp]
-  case G0 e => exact ExpressionInclusionRfl _
-  case G1 e => exact ExpressionInclusionRfl _
+  case G0 k ih =>
+    -- Split the `if k ∈ keys` statement into its True and False realities
+    split
+    · -- True branch: The 'if' evaluates to k.G0.
+      -- We now need to prove `ExpressionInclusion k.G0 k.G0 = true`, which is reflexive!
+      exact ExpressionInclusionRfl _
+    · -- False branch: The 'if' evaluates to k.HiddenG0.
+      -- We need to prove `ExpressionInclusion k.HiddenG0 k.G0 = true`.
+      -- This should be true by the very definition of your inclusion function.
+      simp [ExpressionInclusion]
+
+  case G1 k ih =>
+    split
+    · exact ExpressionInclusionRfl _
+    · simp [ExpressionInclusion]
 
 lemma hideKeys2SmallerValue {s : Shape} (keys : Set (Expression Shape.KeyS)) (p : Expression s) : hideSelectedS keys p ⊆ p := by
   simp [hideSelectedS]

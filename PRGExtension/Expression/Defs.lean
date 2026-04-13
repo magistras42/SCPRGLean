@@ -1,5 +1,6 @@
 namespace PRG
 
+-- need to see if need to add a shape for PRGs
 inductive Shape where
   | BitS : Shape
   | KeyS : Shape
@@ -33,6 +34,9 @@ inductive Expression : Shape → Type
 | Perm : Expression 𝔹 → Expression s → Expression s → Expression (PairS s s) -- Conditional swap of two values based on a bit expression.
 | Enc : Expression 𝕂 → Expression s → Expression (EncS s) -- Encrypt a value with a given key.
 | Hidden : Expression 𝕂 → Expression (EncS s) -- A hole, that represents a value encrypted with a key unaccessible to the adversary.
+-- need to add Hidden for PRGs
+| HiddenG0 : Expression 𝕂 → Expression 𝕂 -- A hole for G0(k)
+| HiddenG1 : Expression 𝕂 → Expression 𝕂 -- A hole for G1(k)
 | Eps : Expression EmptyS -- Empty expression
 deriving DecidableEq, Repr
 
