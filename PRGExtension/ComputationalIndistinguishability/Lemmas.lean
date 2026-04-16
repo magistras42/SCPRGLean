@@ -1,4 +1,4 @@
-import SymbolicGarbledCircuitsInLean.ComputationalIndistinguishability.Def
+import PRGExtension.ComputationalIndistinguishability.Def
 
 -- This file proves basic properties of indistinguishability, such as transitivity and symmetry. It also includes the lemma `IndistinguishabilityByReduction`, which shows how to use reductions to prove indistinguishability.
 

@@ -1,5 +1,5 @@
-import SymbolicGarbledCircuitsInLean.Expression.Defs
-import SymbolicGarbledCircuitsInLean.Expression.SymbolicIndistinguishability
+import PRGExtension.Expression.Defs
+import PRGExtension.Expression.SymbolicIndistinguishability
 import Mathlib.Probability.ProbabilityMassFunction.Basic
 import Mathlib.Probability.ProbabilityMassFunction.Monad
 import Mathlib.Probability.Distributions.Uniform
@@ -13,7 +13,7 @@ import Mathlib.Data.Fintype.BigOperators
 import Mathlib.Data.Finset.Basic
 import Mathlib.Data.Finset.Defs
 
-import SymbolicGarbledCircuitsInLean.Core.CardinalityLemmas
+import PRGExtension.Core.CardinalityLemmas
 
 -- This file defines computational semantics (`exprToFamDistr`), a function that maps an expression (and an encryption scheme) to a distribution over bitstrings.
 
@@ -21,6 +21,7 @@ abbrev BitVector (n: ℕ) := List.Vector Bool n
 
 open Classical
 open PMF
+open PRG
 
 -- We consider an encryption scheme
 structure encryptionFunctions (κ : ℕ) where
@@ -29,6 +30,13 @@ structure encryptionFunctions (κ : ℕ) where
   decrypt : {n : ℕ} -> (key : BitVector κ) -> (msg : BitVector (encryptLength n)) -> BitVector n
 
 def encryptionScheme : Type := (κ : ℕ) -> encryptionFunctions κ
+
+structure prgFunctions (κ : ℕ) where
+  -- A PRG deterministically maps a κ-bit seed to two independent κ-bit pseudo-random strings
+  prg0 : BitVector κ → BitVector κ
+  prg1 : BitVector κ → BitVector κ
+
+def prgScheme : Type := (κ : ℕ) -> prgFunctions κ
 
 def shapeLength (κ : ℕ) (scheme : encryptionFunctions κ) (s : Shape) : ℕ :=
   match s with
@@ -51,8 +59,12 @@ match e with
 | Expression.Pair e₁ e₂ => allVarsSmallerThan e₁ n ∧ allVarsSmallerThan e₂ n
 | Expression.Enc e₁ e₂ => allVarsSmallerThan e₁ n ∧ allVarsSmallerThan e₂ n
 | Expression.Perm e₁ e₂ e₃ => allVarsSmallerThan e₁ n ∧ allVarsSmallerThan e₂ n ∧ allVarsSmallerThan e₃ n
-| Expression.Hidden (Expression.VarK k) => k < n
+| Expression.Hidden k => allVarsSmallerThan k n
 | Expression.Eps => True
+| Expression.G0 e => allVarsSmallerThan e n
+| Expression.G1 e => allVarsSmallerThan e n
+| Expression.HiddenG0 e => allVarsSmallerThan e n
+| Expression.HiddenG1 e => allVarsSmallerThan e n
 
 def allVarsSmallerThanBExprMonotone {e : BitExpr} {n₁ : ℕ} {n₂ : ℕ} (h : n₁ ≤ n₂) (h' : allVarsSmallerThanBExpr e n₁) : allVarsSmallerThanBExpr e n₂ := by
   induction e
@@ -67,27 +79,40 @@ def allVarsSmallerThanBExprMonotone {e : BitExpr} {n₁ : ℕ} {n₂ : ℕ} (h :
     assumption
 
 def allVarsSmallerThanMonotone {s : Shape} (e : Expression s) (n₁ : ℕ ) (n₂ : ℕ) (h₁ : n₁ ≤ n₂) (h₂ : allVarsSmallerThan e n₁) : allVarsSmallerThan e n₂ := by
-  induction e <;> try simp [allVarsSmallerThan]
+  induction e
   case BitE b =>
-    simp [allVarsSmallerThan] at h₂
+    simp [allVarsSmallerThan] at h₂ ⊢
     apply allVarsSmallerThanBExprMonotone h₁ h₂
   case VarK k =>
-    simp [allVarsSmallerThan] at h₂
+    simp [allVarsSmallerThan] at h₂ ⊢
     omega
   case Pair e₁ e₂ ih₁ ih₂ =>
-    simp [allVarsSmallerThan] at h₂
+    simp [allVarsSmallerThan] at h₂ ⊢
     exact ⟨ih₁ h₂.1, ih₂ h₂.2⟩
   case Enc e₁ e₂ ih₁ ih₂ =>
-    simp [allVarsSmallerThan] at h₂
+    simp [allVarsSmallerThan] at h₂ ⊢
     exact ⟨ih₁ h₂.1, ih₂ h₂.2⟩
   case Perm e₁ e₂ e₃ ih₁ ih₂ ih₃ =>
-    simp [allVarsSmallerThan] at h₂
+    simp [allVarsSmallerThan] at h₂ ⊢
     exact ⟨ih₁ h₂.1, ih₂ h₂.2.1, ih₃ h₂.2.2⟩
+  case Eps =>
+    simp [allVarsSmallerThan]
+  -- All wrapper/key cases seamlessly rely on the induction hypothesis!
   case Hidden k ih =>
-    cases k
-    simp[allVarsSmallerThan]
-    simp[allVarsSmallerThan] at h₂
-    omega
+    simp [allVarsSmallerThan] at h₂ ⊢
+    exact ih h₂
+  case G0 e ih =>
+    simp [allVarsSmallerThan] at h₂ ⊢
+    exact ih h₂
+  case G1 e ih =>
+    simp [allVarsSmallerThan] at h₂ ⊢
+    exact ih h₂
+  case HiddenG0 k ih =>
+    simp [allVarsSmallerThan] at h₂ ⊢
+    exact ih h₂
+  case HiddenG1 k ih =>
+    simp [allVarsSmallerThan] at h₂ ⊢
+    exact ih h₂
 
 def getMaxVarBExpr : BitExpr -> ℕ
   | BitExpr.VarB k => k
@@ -100,8 +125,12 @@ def getMaxVar {s : Shape} : Expression s -> ℕ
   | Expression.Pair e₁ e₂ => max (getMaxVar e₁) (getMaxVar e₂)
   | Expression.Enc e₁ e₂ => max (getMaxVar e₁) (getMaxVar e₂)
   | Expression.Perm e₁ e₂ e₃ => max (max (getMaxVar e₁) (getMaxVar e₂)) (getMaxVar e₃)
-  | Expression.Hidden (Expression.VarK k) => k
+  | Expression.Hidden k => getMaxVar k
   | Expression.Eps => 0
+  | Expression.G0 e => getMaxVar e
+  | Expression.G1 e => getMaxVar e
+  | Expression.HiddenG0 e => getMaxVar e
+  | Expression.HiddenG1 e => getMaxVar e
 
 lemma allVarsSmallerThanMaxBexpr (e : BitExpr) : allVarsSmallerThanBExpr e (getMaxVarBExpr e + 1) := by
   induction e
@@ -146,8 +175,15 @@ lemma allVarsSmallerThanMax {s : Shape} (e : Expression s) : allVarsSmallerThan 
       · omega
       · assumption
   case Hidden k ih =>
-    cases k
-    simp[allVarsSmallerThan, getMaxVar]
+    exact ih
+  case G0 e ih =>
+    exact ih
+  case G1 e ih =>
+    exact ih
+  case HiddenG0 k ih =>
+    exact ih
+  case HiddenG1 k ih =>
+    exact ih
 
 lemma getMaxVarMonotone {s : Shape} (e1 e2 : Expression s) (H : e1 ⊆ e2) : getMaxVar e1 <= getMaxVar e2 :=
   by
@@ -170,11 +206,16 @@ lemma getMaxVarMonotone {s : Shape} (e1 e2 : Expression s) (H : e1 ⊆ e2) : get
     rw [H.1]
     omega
   case Enc.Hidden e1 e2 e3 H2 f1 f2 =>
-    -- have R : getMaxVar f2 ≤ getMaxVar e2 := by apply H2; apply H.2
     rw [H]
-    cases e2; simp [getMaxVar]
+    cases e2 <;> simp [getMaxVar]
   case Hidden.Hidden =>
     rw [H]
+  case G0.G0 => rw [H]
+  case G0.HiddenG0 => rw [H]
+  case G1.G1 => rw [H]
+  case G1.HiddenG1 => rw [H]
+  case HiddenG0.HiddenG0 => rw [H]
+  case HiddenG1.HiddenG1 => rw [H]
 
 def evalBitExpr (bVars : ℕ -> Bool) (e : BitExpr) : Bool :=
   match e with
@@ -187,15 +228,15 @@ def evalBitExpr (bVars : ℕ -> Bool) (e : BitExpr) : Bool :=
 def ones {k : ℕ} := List.Vector.replicate k true
 
 noncomputable
-def evalExpr (enc : encryptionFunctions κ) (kVars : ℕ -> BitVector κ) (bVars : ℕ -> Bool) (e : Expression s) : PMF (BitVector (shapeLength κ enc s)) :=
+def evalExpr (enc : encryptionFunctions κ) (prg : prgFunctions κ) (kVars : ℕ -> BitVector κ) (bVars : ℕ -> Bool) (e : Expression s) : PMF (BitVector (shapeLength κ enc s)) :=
   match e with
-  | Expression.Enc (Expression.VarK k) e => do
-    let e' ← evalExpr enc kVars bVars e
-    let key := kVars k
+  | Expression.Enc k e => do
+    let e' ← evalExpr enc prg kVars bVars e
+    let key ← evalExpr enc prg kVars bVars k
     enc.encrypt key e'
   | Expression.Pair e₁ e₂ => do
-    let e₁' ← evalExpr enc kVars bVars e₁
-    let e₂' ← evalExpr enc kVars bVars e₂
+    let e₁' ← evalExpr enc prg kVars bVars e₁
+    let e₂' ← evalExpr enc prg kVars bVars e₂
     PMF.pure $ List.Vector.append e₁' e₂'
   | Expression.BitE b => do
     let b' := evalBitExpr bVars b
@@ -204,15 +245,27 @@ def evalExpr (enc : encryptionFunctions κ) (kVars : ℕ -> BitVector κ) (bVars
     PMF.pure (kVars k)
   | Expression.Perm (Expression.BitE b) e₁ e₂ => do
     let b' := evalBitExpr bVars b
-    let e₁' ← evalExpr enc kVars bVars e₁
-    let e₂' ← evalExpr enc kVars bVars e₂
+    let e₁' ← evalExpr enc prg kVars bVars e₁
+    let e₂' ← evalExpr enc prg kVars bVars e₂
     if b' then PMF.pure $ List.Vector.append e₂' e₁'
     else PMF.pure $ List.Vector.append e₁' e₂'
   | Expression.Eps =>
     PMF.pure List.Vector.nil
-  | Expression.Hidden (Expression.VarK k) => do
-    let key := kVars k
+  | Expression.Hidden k => do
+    let key ← evalExpr enc prg kVars bVars k
     enc.encrypt key ones
+  -- NEW PRG COMPUTATIONAL SEMANTICS:
+  | Expression.G0 e => do
+    let e' ← evalExpr enc prg kVars bVars e
+    PMF.pure (prg.prg0 e')
+  | Expression.G1 e => do
+    let e' ← evalExpr enc prg kVars bVars e
+    PMF.pure (prg.prg1 e')
+  -- IDEAL RANDOM ORACLE FOR REDACTED PRGS:
+  | Expression.HiddenG0 _ => do
+    uniformOfFintype (BitVector κ)
+  | Expression.HiddenG1 _ => do
+    uniformOfFintype (BitVector κ)
 
 def extendFin {k : ℕ} (default : X) (x : Fin k -> X) :  (ℕ -> X) :=
   fun i =>
@@ -221,26 +274,24 @@ def extendFin {k : ℕ} (default : X) (x : Fin k -> X) :  (ℕ -> X) :=
     else
       default
 
+-- Update the wrappers to pass the PRG down:
 noncomputable
-def evalExprVarsL {s : Shape} {κ : ℕ} (enc : encryptionFunctions κ) (vars_length : ℕ) (e : Expression s)  : PMF (BitVector (shapeLength κ enc s)) := do
-  -- let v := getMaxVar e + 1
-  -- now we pick a random vector of v boolean values from the uniform distribution
+def evalExprVarsL {s : Shape} {κ : ℕ} (enc : encryptionFunctions κ) (prg : prgFunctions κ) (vars_length : ℕ) (e : Expression s)  : PMF (BitVector (shapeLength κ enc s)) := do
   let bvars <- uniformOfFintype (Fin vars_length -> Bool)
   let kvars <- uniformOfFintype (Fin vars_length -> BitVector κ)
-  evalExpr enc (extendFin ones kvars) (extendFin false bvars) e
+  evalExpr enc prg (extendFin ones kvars) (extendFin false bvars) e
 
 def restrict {k l : ℕ} (H : l<=k) (f : Fin k -> S) : (Fin l -> S) :=
   fun i =>
     f ⟨i, by omega⟩
 
 noncomputable
-def exprToDistr {s : Shape} {κ : ℕ} (enc : encryptionFunctions κ) (e : Expression s)  : PMF (BitVector (shapeLength κ enc s)) :=
-  evalExprVarsL enc (getMaxVar e + 1) e
+def exprToDistr {s : Shape} {κ : ℕ} (enc : encryptionFunctions κ) (prg : prgFunctions κ) (e : Expression s)  : PMF (BitVector (shapeLength κ enc s)) :=
+  evalExprVarsL enc prg (getMaxVar e + 1) e
 
--- main definition of the module - computational semantic of expression
 noncomputable
-def exprToFamDistr (enc : encryptionScheme) (e : Expression s) : (κ : ℕ) → PMF (BitVector (shapeLength κ (enc κ) s)) :=
-  fun κ => exprToDistr (enc κ) e
+def exprToFamDistr (enc : encryptionScheme) (prg : prgScheme) (e : Expression s) : (κ : ℕ) → PMF (BitVector (shapeLength κ (enc κ) s)) :=
+  fun κ => exprToDistr (enc κ) (prg κ) e
 
 ----- LEMMAS -----
 
@@ -263,11 +314,11 @@ lemma evalNoMatterBit (l : ℕ) (bVars1 bVars2 : ℕ -> Bool) (e : BitExpr) :
     assumption
 
 
-lemma evalNoMatter {s : Shape} {κ : ℕ} (enc : encryptionFunctions κ) (l : ℕ) (kVars1 kVars2: (ℕ -> BitVector κ)) (bVars1 bVars2 : ℕ -> Bool) (e : Expression s) :
+lemma evalNoMatter {s : Shape} {κ : ℕ} (enc : encryptionFunctions κ) (prg : prgFunctions κ) (l : ℕ) (kVars1 kVars2: (ℕ -> BitVector κ)) (bVars1 bVars2 : ℕ -> Bool) (e : Expression s) :
   agreeOnPrefix l kVars1 kVars2 ->
   agreeOnPrefix l bVars1 bVars2 ->
   l >= getMaxVar e + 1 ->
-  evalExpr enc kVars1 bVars1 e = evalExpr enc kVars2 bVars2 e := by
+  evalExpr enc prg kVars1 bVars1 e = evalExpr enc prg kVars2 bVars2 e := by
   intro Hk Hb Hl
   induction e <;> try (simp [evalExpr, evalBitExpr]; try simp [getMaxVar] at Hl)
   case BitE a =>
@@ -277,7 +328,7 @@ lemma evalNoMatter {s : Shape} {κ : ℕ} (enc : encryptionFunctions κ) (l : �
   case VarK a =>
     rw [Hk]
     assumption
-  case Pair s1s2 e1 e2 He1 He2 =>
+  case Pair e1 e2 He1 He2 =>
     rw [He1, He2] <;> omega
   case Perm s e1 e2 Hs He1 He2 =>
     cases s
@@ -286,17 +337,23 @@ lemma evalNoMatter {s : Shape} {κ : ℕ} (enc : encryptionFunctions κ) (l : �
     rw [He1] <;> try omega
     rw [He2] <;> try omega
     rw [evalNoMatterBit l] <;> try omega
-  case Enc e1 e2 He1 He2 =>
-    cases e1
-    simp [getMaxVar] at Hl
-    simp [evalExpr]
-    rw [He2] <;> try omega
-    rw [Hk] ; try omega
-  case Hidden e He =>
-    cases e
-    simp [getMaxVar] at Hl
-    simp [evalExpr]
-    rw [Hk] ; try omega
+  case Enc k e Hk_ih He_ih =>
+    --simp [getMaxVar] at Hl
+    --simp [evalExpr]
+    rw [He_ih] <;> try omega
+    rw [Hk_ih]; try omega
+  case Hidden k Hk_ih =>
+    -- simp [getMaxVar] at Hl
+    -- simp [evalExpr]
+    rw [Hk_ih]; try omega
+  case G0 k Hk_ih =>
+    -- simp [getMaxVar] at Hl
+    -- simp [evalExpr]
+    rw [Hk_ih] ; try omega
+  case G1 k Hk_ih =>
+    -- simp [getMaxVar] at Hl
+    -- simp [evalExpr]
+    rw [Hk_ih] ; try omega
 
 lemma restrictAndExtend (l1 l2 : ℕ) (H : l1 <= l2) (f : Fin l2 -> S) (zero : S) :
   agreeOnPrefix l1 (extendFin zero f) (extendFin zero (restrict H f)) := by
@@ -310,13 +367,13 @@ lemma restrictAndExtend (l1 l2 : ℕ) (H : l1 <= l2) (f : Fin l2 -> S) (zero : S
     exact dif_pos Hi
   rw [Ha, Hb]
 
-lemma boring {s : Shape} {κ : ℕ} (enc : encryptionFunctions κ) (l : ℕ) (l2 : ℕ) (kVars: (Fin l -> BitVector κ)) (bVars : Fin l -> Bool) (e : Expression s) :
+lemma boring {s : Shape} {κ : ℕ} (enc : encryptionFunctions κ) (prg : prgFunctions κ) (l : ℕ) (l2 : ℕ) (kVars: (Fin l -> BitVector κ)) (bVars : Fin l -> Bool) (e : Expression s) :
   (H : l >= l2) ->
   (l2 >= getMaxVar e+1) ->
-  evalExpr enc (extendFin ones kVars) (extendFin false bVars) e =
-  evalExpr enc (extendFin ones (restrict H kVars)) (extendFin false (restrict H bVars)) e := by
+  evalExpr enc prg (extendFin ones kVars) (extendFin false bVars) e =
+  evalExpr enc prg (extendFin ones (restrict H kVars)) (extendFin false (restrict H bVars)) e := by
   intro H Hl
-  apply evalNoMatter _ (l2)
+  apply evalNoMatter _ prg (l2)
   apply restrictAndExtend
   apply restrictAndExtend
   assumption
@@ -467,20 +524,20 @@ lemma rndsEq {κ : ℕ} (vars_length1 vars_length2 : ℕ) (H : vars_length2 <= v
   all_goals (try assumption)
 
 noncomputable
-def evalExprVarsL2 {s : Shape} {κ : ℕ} (enc : encryptionFunctions κ) (vars_length : ℕ) (e : Expression s)  : PMF (BitVector (shapeLength κ enc s)) := do
+def evalExprVarsL2 {s : Shape} {κ : ℕ} (enc : encryptionFunctions κ) (prg : prgFunctions κ) (vars_length : ℕ) (e : Expression s)  : PMF (BitVector (shapeLength κ enc s)) := do
   let rand <- rnd1 κ vars_length
   let (bvars, kvars) := rand
-  evalExpr enc (extendFin ones kvars) (extendFin false bvars) e
+  evalExpr enc prg (extendFin ones kvars) (extendFin false bvars) e
 
-lemma evalExprVarsL2Eq {s : Shape} {κ : ℕ} (enc : encryptionFunctions κ) (vars_length : ℕ) (e : Expression s) : evalExprVarsL2 enc vars_length e = evalExprVarsL enc vars_length e := by
+lemma evalExprVarsL2Eq {s : Shape} {κ : ℕ} (enc : encryptionFunctions κ) (prg : prgFunctions κ) (vars_length : ℕ) (e : Expression s) : evalExprVarsL2 enc prg vars_length e = evalExprVarsL enc prg vars_length e := by
   simp [evalExprVarsL2, evalExprVarsL]
   simp [rnd1]
 
 
-lemma evalExprVarsNoMatter {s : Shape} {κ : ℕ} (enc : encryptionFunctions κ) (vars_length1 vars_length2: ℕ) (e : Expression s) :
+lemma evalExprVarsNoMatter {s : Shape} {κ : ℕ} (enc : encryptionFunctions κ) (prg : prgFunctions κ) (vars_length1 vars_length2: ℕ) (e : Expression s) :
   vars_length1 >= vars_length2 ->
   vars_length2 >= (getMaxVar e + 1) ->
-  evalExprVarsL enc vars_length1 e = evalExprVarsL enc vars_length2 e := by
+  evalExprVarsL enc prg vars_length1 e = evalExprVarsL enc prg vars_length2 e := by
   intro Hv1 Hv2
   nth_rw 2 [<-evalExprVarsL2Eq]
   simp [evalExprVarsL]
@@ -495,7 +552,7 @@ lemma evalExprVarsNoMatter {s : Shape} {κ : ℕ} (enc : encryptionFunctions κ)
       congr
       · skip
       · intro y
-        rw [boring enc vars_length1 vars_length2 _ _ _ (by assumption) (by assumption)]
+        rw [boring enc prg vars_length1 vars_length2 _ _ _ (by assumption) (by assumption)]
         skip
 
 def subst {X n} (i : ℕ) (x : X) (f : Fin n -> X) : Fin n -> X :=
@@ -650,26 +707,26 @@ by
   intro i Hi
   simp [extendFin, Hi, restrictInfToFin]
 
-lemma evalCutAndExtend (n : ℕ) (H : n > getMaxVar e):
-  evalExpr enc (subst2 key₀ seed (extendFin ones b)) (extendFin false a) e =
-  evalExpr enc (extendFin ones (@restrictInfToFin _ n (subst2 key₀ seed (extendFin ones b)))) (extendFin false a) e :=
+lemma evalCutAndExtend {κ : ℕ} {enc : encryptionFunctions κ} {prg : prgFunctions κ} {s : Shape} {e : Expression s} {key₀ : ℕ} {seed : BitVector κ} {a : Fin n → Bool} {b : Fin n → BitVector κ} (n : ℕ) (H : n > getMaxVar e):
+  evalExpr enc prg (subst2 key₀ seed (extendFin ones b)) (extendFin false a) e =
+  evalExpr enc prg (extendFin ones (@restrictInfToFin _ n (subst2 key₀ seed (extendFin ones b)))) (extendFin false a) e :=
 by
-  apply evalNoMatter _ n
+  apply evalNoMatter enc prg n
   apply cutAndExtend
   simp [agreeOnPrefix]
   assumption
 
-lemma veryBoring :
+lemma veryBoring {κ l : ℕ} {enc : encryptionFunctions κ} {prg : prgFunctions κ} {s : Shape} {e : Expression s} {key₀ : ℕ}:
   (do
     let a ← PMF.uniformOfFintype (BitVector κ)
     let b ←  (PMF.uniformOfFintype (Fin l → Bool))
     let c ←  (PMF.uniformOfFintype (Fin l → BitVector κ))
-    evalExpr enc (extendFin ones (restrictInfToFin l (subst2 key₀ a (extendFin ones c)))) (extendFin false b) e
+    evalExpr enc prg (extendFin ones (restrictInfToFin l (subst2 key₀ a (extendFin ones c)))) (extendFin false b) e
   ) =
   (do
     let b ←  (PMF.uniformOfFintype (Fin l → Bool))
     let c <- resampling2 l key₀ ones
-    evalExpr enc (extendFin ones c) (extendFin false b) e
+    evalExpr enc prg (extendFin ones c) (extendFin false b) e
   ) := by
   simp [resampling2]
   simp [Bind.bind]
@@ -680,13 +737,13 @@ lemma veryBoring :
     intro x
     rw [PMF.bind_comm]
 
-lemma resamplingLemma2 {l : ℕ} (key₀ : ℕ) {enc : encryptionFunctions κ} : (l > getMaxVar e) ->
+lemma resamplingLemma2 {κ l : ℕ} {enc : encryptionFunctions κ} {prg : prgFunctions κ} {s : Shape} {e : Expression s} (key₀ : ℕ) : (l > getMaxVar e) ->
   (do
     let seed ← PMF.uniformOfFintype (BitVector κ)
     let a ←  (PMF.uniformOfFintype (Fin l → Bool))
     let b ←  (PMF.uniformOfFintype (Fin l → BitVector κ))
-    evalExpr enc (subst2 key₀ seed (extendFin ones b)) (extendFin false a) e) =
-   (exprToDistr enc e)
+    evalExpr enc prg (subst2 key₀ seed (extendFin ones b)) (extendFin false a) e) =
+   (exprToDistr enc prg e)
   := by
   intro Hi
   conv =>
@@ -698,7 +755,7 @@ lemma resamplingLemma2 {l : ℕ} (key₀ : ℕ) {enc : encryptionFunctions κ} :
   rw [veryBoring]
   rw [<-resampleIsTrivial2 ones]
   simp [exprToDistr]
-  rw [<-evalExprVarsNoMatter _ l (getMaxVar e + 1)]
+  rw [<-evalExprVarsNoMatter enc prg l (getMaxVar e + 1)]
   · simp [evalExprVarsL]
   · exact Hi
   · apply Nat.le_refl
@@ -723,14 +780,14 @@ lemma lifting (x : PMF X) (f : X -> PMF Y) :
       rw [@Bind.bind, Monad.toBind, OptionT.instMonad]
       simp [OptionT.bind, OptionT.mk]
 
-lemma resamplingLemma : (l > getMaxVar e) ->
+lemma resamplingLemma {κ l : ℕ} {enc : encryptionScheme} {prg : prgScheme} {s : Shape} {e : Expression s} {key₀ : ℕ} : (l > getMaxVar e) ->
   (do
     let z : OptionT PMF _ := PMF.uniformOfFintype (BitVector κ)
     let seed ← z
     let a ← liftM (PMF.uniformOfFintype (Fin l → Bool))
     let b ← liftM (PMF.uniformOfFintype (Fin l → BitVector κ))
-    liftM (evalExpr (enc κ) (subst2 key₀ seed (extendFin ones b)) (extendFin false a) e)) =
-  liftM (exprToFamDistr enc e κ)
+    liftM (evalExpr (enc κ) (prg κ) (subst2 key₀ seed (extendFin ones b)) (extendFin false a) e)) =
+  liftM (exprToFamDistr enc prg e κ)
   :=
   by
     intro H

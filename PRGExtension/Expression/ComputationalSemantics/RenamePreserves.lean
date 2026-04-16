@@ -1,35 +1,36 @@
-import SymbolicGarbledCircuitsInLean.Expression.Defs
-import SymbolicGarbledCircuitsInLean.Expression.SymbolicIndistinguishability
-import SymbolicGarbledCircuitsInLean.Expression.ComputationalSemantics.Def
+import PRGExtension.Expression.Defs
+import PRGExtension.Expression.SymbolicIndistinguishability
+import PRGExtension.Expression.ComputationalSemantics.Def
 
-import SymbolicGarbledCircuitsInLean.Core.CardinalityLemmas
-
+import PRGExtension.Core.CardinalityLemmas
 import Mathlib.Probability.Distributions.Uniform
 import Mathlib.Topology.Algebra.InfiniteSum.Basic
 import Mathlib.Probability.Distributions.Uniform
 
 import Mathlib.Data.ENNReal.Inv
 
-
+open PRG
 
 def applyKeyRenamingToKVars (f : KeyRenaming) (kVars : (ℕ -> BitVector κ)) : (ℕ -> BitVector κ) :=
   fun i => kVars (f i)
 
-lemma applyKeyRenamingToKeyVarsCorrect
-  (enc : encryptionFunctions κ) (keyVars : (ℕ -> BitVector κ)) (bVars : ℕ -> Bool)
+lemma applyKeyRenamingToKeyVarsCorrect {κ : ℕ}
+  (enc : encryptionFunctions κ) (prg : prgFunctions κ) (keyVars : (ℕ -> BitVector κ)) (bVars : ℕ -> Bool)
   (expr : Expression s) (f : KeyRenaming) :
-  evalExpr enc keyVars bVars (applyKeyRenamingP f expr) = evalExpr enc (applyKeyRenamingToKVars f keyVars) bVars expr := by
+  evalExpr enc prg keyVars bVars (applyKeyRenamingP f expr) = evalExpr enc prg (applyKeyRenamingToKVars f keyVars) bVars expr := by
   induction expr <;> simp [applyKeyRenamingP, evalExpr, applyKeyRenamingToKVars]
   case Pair e1 e2 ih1 ih2 =>
     simp [ih1, ih2]
   case Perm eb e1 e2 ihb ih1 ih2 =>
     let (Expression.BitE b) := eb
     simp [evalExpr, ih1, ih2]
-  case Enc k' e ihk ihe =>
-    let (Expression.VarK k) := k'
+  case Enc k e ihk ihe =>
     simp [evalExpr, ihk, ihe, applyKeyRenamingP, applyKeyRenamingToKVars]
   case Hidden k ihk =>
-    let (Expression.VarK k) := k
+    simp [evalExpr, ihk, applyKeyRenamingP, applyKeyRenamingToKVars]
+  case G0 k ihk =>
+    simp [evalExpr, ihk, applyKeyRenamingP, applyKeyRenamingToKVars]
+  case G1 k ihk =>
     simp [evalExpr, ihk, applyKeyRenamingP, applyKeyRenamingToKVars]
 
 def applyBitRenamingToBVars (f : BitRenaming) (bVars : ℕ -> Bool) : (ℕ -> Bool) :=
@@ -50,11 +51,11 @@ lemma applyBitRenamingToBVarsCorrectB
   case Not x ihx =>
     simp [evalBitExpr, ihx, applyBitRenamingB]
 
-lemma applyBitRenamingToBVarsCorrect
-  (enc : encryptionFunctions κ) (keyVars : (ℕ -> BitVector κ)) (bVars : ℕ -> Bool)
+lemma applyBitRenamingToBVarsCorrect {κ : ℕ}
+  (enc : encryptionFunctions κ) (prg : prgFunctions κ) (keyVars : (ℕ -> BitVector κ)) (bVars : ℕ -> Bool)
   (expr : Expression s) (f : BitRenaming) :
-  evalExpr enc keyVars (applyBitRenamingToBVars f bVars) expr = evalExpr enc keyVars bVars (applyBitRenaming f expr) := by
-  induction expr <;> simp [applyBitRenaming, evalExpr, applyBitRenamingToBVars, applyBitRenamingB, applyBitRenamingB]
+  evalExpr enc prg keyVars (applyBitRenamingToBVars f bVars) expr = evalExpr enc prg keyVars bVars (applyBitRenaming f expr) := by
+  induction expr <;> simp [applyBitRenaming, evalExpr, applyBitRenamingToBVars, applyBitRenamingB]
   case Pair e1 e2 ih1 ih2 =>
     simp [ih1, ih2]
   case Perm eb e1 e2 ihb ih1 ih2 =>
@@ -62,13 +63,15 @@ lemma applyBitRenamingToBVarsCorrect
     simp [evalExpr, applyBitRenamingToBVars, ih1, ih2, ihb, evalBitExpr]
     rw [← applyBitRenamingToBVarsCorrectB]
   case Enc k e ihk ihe =>
-    let (Expression.VarK k) := k
     simp [evalExpr, applyBitRenamingToBVars, ihk, ihe, applyBitRenaming]
   case Hidden k ihk =>
-    let (Expression.VarK k) := k
     simp [evalExpr, applyBitRenamingToBVars, ihk, applyBitRenaming]
   case BitE b =>
      rw [← applyBitRenamingToBVarsCorrectB]
+  case G0 k ihk =>
+    simp [evalExpr, ihk, applyBitRenaming]
+  case G1 k ihk =>
+    simp [evalExpr, ihk, applyBitRenaming]
 
 lemma uniformOfFintypeMapBijection
   [Fintype α] [Nonempty α] [Fintype β] [Nonempty β] (f : α → β) (hf : Function.Bijective f) :
@@ -389,10 +392,10 @@ lemma extendRestrictAgree (n : ℕ) (v : A) (e : ℕ → A) : agreeOnPrefix n (e
   intro i h1 h2
   omega
 
-lemma renamePreservesComputationalSemantics
-  (enc : encryptionFunctions κ) (expr : Expression s) (r : varRenaming) (hr : validVarRenaming r)
+lemma renamePreservesComputationalSemantics {κ : ℕ}
+  (enc : encryptionFunctions κ) (prg : prgFunctions κ) (expr : Expression s) (r : varRenaming) (hr : validVarRenaming r)
   :
-  exprToDistr enc expr = exprToDistr enc (applyVarRenaming r expr) := by
+  exprToDistr enc prg expr = exprToDistr enc prg (applyVarRenaming r expr) := by
     let b := r.1
     let b' := castVarOrNegVar ∘ b
     let f := r.2
@@ -449,7 +452,7 @@ lemma renamePreservesComputationalSemantics
       simp [extendRenameRestrictK]
       arg 2
       intro kvars
-      rw [evalNoMatter enc (getMaxVar expr + 1) _ (applyKeyRenamingToKVars f (extendFin ones kvars)) _ ((applyBitRenamingToBVars b (extendFin false bvars)))]
+      rw [evalNoMatter enc prg (getMaxVar expr + 1) _ (applyKeyRenamingToKVars f (extendFin ones kvars)) _ ((applyBitRenamingToBVars b (extendFin false bvars)))]
       rw [applyBitRenamingToBVarsCorrect]
       rw [← applyKeyRenamingToKeyVarsCorrect]
       rfl
@@ -458,14 +461,14 @@ lemma renamePreservesComputationalSemantics
       tactic => omega
       tactic => omega
     simp [exprToDistr]
-    rw [← evalExprVarsNoMatter enc l] <;> try rfl
+    rw [← evalExprVarsNoMatter enc prg l] <;> try rfl
     simp [l]
     omega
 
 lemma applyRenamePreservesCompSem2
-  (enc : encryptionScheme) (expr : Expression s) (r : varRenaming) (hr : validVarRenaming r)
+  (enc : encryptionScheme) (prg : prgScheme) (expr : Expression s) (r : varRenaming) (hr : validVarRenaming r)
   :
-  exprToFamDistr enc expr = exprToFamDistr enc (applyVarRenaming r expr) :=
+  exprToFamDistr enc prg expr = exprToFamDistr enc prg (applyVarRenaming r expr) :=
   by
     ext κ c
     simp [exprToFamDistr]
