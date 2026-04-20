@@ -1,7 +1,7 @@
 import PRGExtension.Expression.Defs
 import PRGExtension.Expression.SymbolicIndistinguishability
 
-namespace PRG
+open PRG
 
 def lengthOfBit : BitExpr -> Nat
 | BitExpr.Not x =>

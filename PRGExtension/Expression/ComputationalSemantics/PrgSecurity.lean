@@ -5,7 +5,7 @@ import SymbolicGarbledCircuitsInLean.VCVio2.VCVio.OracleComp.OracleSpec
 import SymbolicGarbledCircuitsInLean.VCVio2.VCVio.OracleComp.OracleComp
 import SymbolicGarbledCircuitsInLean.VCVio2.VCVio.OracleComp.SimSemantics.SimulateQ
 
-open PRG
+namespace PRG
 
 -- The oracle takes a Unit (no meaningful input) and returns a pair of κ-bit strings
 def oracleSpecPrg (κ : ℕ) : OracleSpec Unit :=
@@ -49,3 +49,5 @@ def seededPrgIdealOracle : famSeededOracle (fun κ ↦ oracleSpecPrg κ) := {
 -- indistinguishable from the ideal random distribution.
 def prgSchemeSecure (IsPolyTime : PolyFamOracleCompPred) (prg : prgScheme) : Prop :=
   CompIndistinguishabilitySeededOracle IsPolyTime (seededPrgRealOracle prg) seededPrgIdealOracle
+
+end PRG

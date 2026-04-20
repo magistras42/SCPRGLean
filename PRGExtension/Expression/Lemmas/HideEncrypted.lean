@@ -2,7 +2,7 @@ import PRGExtension.Expression.Defs
 import PRGExtension.Expression.SymbolicIndistinguishability
 
 -- In this module we define some lemmas (mostly about adversary's view)
-namespace PRG
+open PRG
 
 noncomputable
 def hideEncryptedS {s : Shape} (keys : Set (Expression Shape.KeyS)) (p : Expression s) : Expression s :=

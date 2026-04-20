@@ -87,3 +87,5 @@ def makeVarRenaming (f : ℕ → Bool) : varRenaming  :=
 def makeTotalRenamingCorrect (f : ℕ → Bool) : validVarRenaming (makeVarRenaming f) := by
   simp [validVarRenaming]
   exact ⟨bitPermInjective f, keySwapBijective f⟩
+
+end PRG

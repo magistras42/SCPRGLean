@@ -9,7 +9,7 @@ import Mathlib.Probability.Distributions.Uniform
 
 import Mathlib.Data.ENNReal.Inv
 
-open PRG
+namespace PRG
 
 def applyKeyRenamingToKVars (f : KeyRenaming) (kVars : (ℕ -> BitVector κ)) : (ℕ -> BitVector κ) :=
   fun i => kVars (f i)
@@ -474,3 +474,5 @@ lemma applyRenamePreservesCompSem2
     simp [exprToFamDistr]
     rw [renamePreservesComputationalSemantics]
     assumption
+
+end PRG

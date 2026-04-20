@@ -1,10 +1,11 @@
-import SymbolicGarbledCircuitsInLean.Expression.ComputationalSemantics.Def
-import SymbolicGarbledCircuitsInLean.ComputationalIndistinguishability.Def
+import PRGExtension.Expression.ComputationalSemantics.Def
+import PRGExtension.ComputationalIndistinguishability.Def
 import SymbolicGarbledCircuitsInLean.VCVio2.VCVio.OracleComp.OracleSpec
 import SymbolicGarbledCircuitsInLean.VCVio2.VCVio.OracleComp.OracleComp
 import SymbolicGarbledCircuitsInLean.VCVio2.VCVio.OracleComp.SimSemantics.SimulateQ
 
 -- defines the notion of IND-CPA security for encryption schemes.
+namespace PRG
 
 def oracleSpecIndCpa (κ : ℕ) (enc : encryptionFunctions κ) : OracleSpec ℕ :=
   fun n => ((BitVector n)×(BitVector n), BitVector (enc.encryptLength n))
@@ -34,3 +35,5 @@ def seededIndCpaOracleImpl (w : Side) (enc : encryptionScheme) : famSeededOracle
 
 def encryptionSchemeIndCpa (IsPolyTime : PolyFamOracleCompPred) (enc : encryptionScheme)  : Prop :=
   CompIndistinguishabilitySeededOracle IsPolyTime (seededIndCpaOracleImpl Side.L enc) (seededIndCpaOracleImpl Side.R enc)
+
+end PRG

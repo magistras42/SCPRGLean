@@ -593,3 +593,5 @@ def adversaryView {s : Shape} (e : Expression s) : Expression s :=
 def symIndistinguishable {s : Shape} (e1 e2 : Expression s) : Prop :=
   ∃ (r : varRenaming), validVarRenaming r ∧
    normalizeExpr (applyVarRenaming r (adversaryView e1)) = normalizeExpr (adversaryView e2)
+
+end PRG

@@ -15,13 +15,14 @@ import Mathlib.Data.Finset.Defs
 
 import PRGExtension.Core.CardinalityLemmas
 
+namespace PRG
+
 -- This file defines computational semantics (`exprToFamDistr`), a function that maps an expression (and an encryption scheme) to a distribution over bitstrings.
 
 abbrev BitVector (n: ℕ) := List.Vector Bool n
 
 open Classical
 open PMF
-open PRG
 
 -- We consider an encryption scheme
 structure encryptionFunctions (κ : ℕ) where
@@ -794,3 +795,5 @@ lemma resamplingLemma {κ l : ℕ} {enc : encryptionScheme} {prg : prgScheme} {s
     rw [exprToFamDistr]
     rw [<-resamplingLemma2 key₀ H]
     simp [lifting]
+
+end PRG
