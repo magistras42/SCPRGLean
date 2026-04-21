@@ -227,12 +227,15 @@ def ExpressionInclusion :  {s : Shape} -> (p1 : Expression s) -> (p2 : Expressio
 | .(_), Expression.Enc k e, Expression.Enc k' e' => k == k' ∧ ExpressionInclusion e e'
 | .(_), Expression.Hidden k, Expression.Enc k' _ => k == k'
 -- PRG instances just match exactly with each other
-| .(_), Expression.G0 k1, Expression.G0 k2 => k1 == k2
-| .(_), Expression.G1 k1, Expression.G1 k2 => k1 == k2
+| .(_), Expression.G0 e1, Expression.G0 e2 => ExpressionInclusion e1 e2
+| .(_), Expression.G1 e1, Expression.G1 e2 => ExpressionInclusion e1 e2
 -- Catch-all for non-matching shapes
 | .(_), _, _ => false
 
 notation  p1 "⊆" p2 => (ExpressionInclusion p1 p2)
+
+def KeySetInclusion {s : Shape} (K1 K2 : Finset (Expression s)) : Prop :=
+  ∀ k1 ∈ K1, ∃ k2 ∈ K2, ExpressionInclusion k1 k2 = true
 
 -- Next we introduce a block of lemmas about `ExpressionInclusion`, `hideEncrypted`, and `extractKeys`.
 
@@ -262,6 +265,8 @@ lemma hideEncryptedMonotone {s : Shape} (keys1 keys2 : Finset (Expression Shape.
     · by_cases hk2 : k ∈ keys2
       · simp [hk1, hk2, ExpressionInclusion, hideEncrypted_key_id]
       · simp [hk1, hk2, ExpressionInclusion, hideEncrypted_key_id]
+  case G0 k ih => exact ExpressionInclusionRfl k
+  case G1 k ih => exact ExpressionInclusionRfl k
 
 -- lemma hideEncryptedMonotone {s : Shape} (keys1 keys2 : Finset (Expression Shape.KeyS)) (p : Expression s) (h : keys1 ⊆ keys2) :
 --   hideEncrypted keys1 p ⊆ hideEncrypted keys2 p := by
@@ -317,6 +322,129 @@ lemma hideEncryptedMonotone {s : Shape} (keys1 keys2 : Finset (Expression Shape.
 --       cases k2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
 --       exact congrArg _ (eq_of_ExpressionInclusion_key e _ h)
 
+-- 1. A set is structurally included in itself (Base Cases)
+lemma KeySetInclusion_refl {s : Shape} (K : Finset (Expression s)) : KeySetInclusion K K := by
+  intro k hk
+  exact ⟨k, hk, ExpressionInclusionRfl k⟩
+
+-- 2. If A ⊆ C and B ⊆ D, then (A ∪ B) ⊆ (C ∪ D) (For Pair, Perm, Enc)
+lemma KeySetInclusion_union {s : Shape} {A B C D : Finset (Expression s)}
+  (h1 : KeySetInclusion A C) (h2 : KeySetInclusion B D) :
+  KeySetInclusion (A ∪ B) (C ∪ D) := by
+  intro k hk
+  simp only [Finset.mem_union] at hk ⊢
+  cases hk with
+  | inl hA =>
+      rcases h1 k hA with ⟨k2, hk2, hinc⟩
+      exact ⟨k2, Or.inl hk2, hinc⟩
+  | inr hB =>
+      rcases h2 k hB with ⟨k2, hk2, hinc⟩
+      exact ⟨k2, Or.inr hk2, hinc⟩
+
+-- 3. If k1 ⊆ k2 and K1 ⊆ K2, then insert k1 K1 ⊆ insert k2 K2 (For G0, G1, Enc if using insert)
+lemma KeySetInclusion_insert {s : Shape} {k1 k2 : Expression s} {K1 K2 : Finset (Expression s)}
+  (h_k : ExpressionInclusion k1 k2 = true) (h_K : KeySetInclusion K1 K2) :
+  KeySetInclusion (insert k1 K1) (insert k2 K2) := by
+  intro k hk
+  simp only [Finset.mem_insert] at hk ⊢
+  cases hk with
+  | inl heq =>
+      subst heq
+      exact ⟨k2, Or.inl rfl, h_k⟩
+  | inr hmem =>
+      rcases h_K k hmem with ⟨k_out, h_out_mem, hinc⟩
+      exact ⟨k_out, Or.inr h_out_mem, hinc⟩
+
+-- 4. If A ⊆ B, then A is included in (B ∪ C) (Crucial for proving Hidden ⊆ Enc)
+lemma KeySetInclusion_subset_right {s : Shape} {A B C : Finset (Expression s)}
+  (h : KeySetInclusion A B) : KeySetInclusion A (B ∪ C) := by
+  intro k hk
+  rcases h k hk with ⟨k2, hk2, hinc⟩
+  exact ⟨k2, Finset.mem_union_left C hk2, hinc⟩
+
+lemma KeySetInclusion_empty {s : Shape} (K : Finset (Expression s)) : KeySetInclusion ∅ K := by
+  intro k hk
+  simp at hk -- A contradiction, nothing is in the empty set
+
+lemma KeySetInclusion_singleton {s : Shape} {e1 e2 : Expression s} (h : ExpressionInclusion e1 e2 = true) :
+  KeySetInclusion {e1} {e2} := by
+  intro k hk
+  simp only [Finset.mem_singleton] at hk ⊢
+  subst hk
+  exact ⟨e2, rfl, h⟩
+
+lemma keyPartsMonotone' {s : Shape} (p1 p2 : Expression s) (h : ExpressionInclusion p1 p2 = true) :
+  KeySetInclusion (extractKeys p1) (extractKeys p2) := by
+  induction p1 with
+  -- Base Cases (Keys are identical, so apply reflexivity)
+  | VarK k =>
+      cases p2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
+      -- 'h' is (k == a✝) = true. Convert to strict equality.
+      have heq : k = _ := eq_of_beq h
+      subst heq
+      simp [extractKeys]
+      exact KeySetInclusion_refl _
+  | BitE b =>
+      cases p2 ; simp only [ExpressionInclusion] at h ; try contradiction
+      simp [extractKeys]
+      apply KeySetInclusion_refl
+  | Eps =>
+      cases p2 ; simp only [ExpressionInclusion] at h ; try contradiction
+      simp [extractKeys]
+      apply KeySetInclusion_refl
+  -- Union Cases (Just swap Finset.union_subset_union for our new lemma)
+  | Pair e1 e2 ih1 ih2 =>
+      cases p2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
+      have ⟨h1, h2⟩ := of_decide_eq_true h
+      simp [extractKeys]
+      exact KeySetInclusion_union (ih1 _ h1) (ih2 _ h2)
+  | Perm z e1 e2 ih_z ih_e1 ih_e2 =>
+      cases p2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
+      have ⟨he1_incl, he2_incl, _hz_incl⟩ := of_decide_eq_true h
+      simp only [extractKeys]
+      exact KeySetInclusion_union (ih_e1 _ he1_incl) (ih_e2 _ he2_incl)
+
+  | Enc k e ih_k ih_e =>
+      cases p2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
+      have ⟨_hk, he⟩ := of_decide_eq_true h
+      simp [extractKeys]
+      -- Because extractKeys (Enc) only extracts from 'e', we only use ih_e
+      exact ih_e _ he
+  | Hidden k =>
+      cases p2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
+      · simp [extractKeys]
+        exact KeySetInclusion_empty _
+      · simp [extractKeys]
+        exact KeySetInclusion_empty _
+  | G0 e ih_e =>
+      cases p2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
+      simp [extractKeys]
+      -- h is exactly ExpressionInclusion e a✝ = true
+      exact KeySetInclusion_singleton h
+  | G1 e ih_e =>
+      cases p2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
+      simp [extractKeys]
+      -- h is exactly ExpressionInclusion e a✝ = true
+      exact KeySetInclusion_singleton h
+
+lemma shape_K_eq {e a : Expression 𝕂} (h : ExpressionInclusion e a = true) : e = a :=
+  match e with
+  | .VarK n => by
+      cases a <;> simp [ExpressionInclusion] at h ; try contradiction
+      -- simp already proved n = a✝, so we just substitute it!
+      subst h
+      rfl
+  | .G0 e_inner => by
+      cases a <;> simp [ExpressionInclusion] at h ; try contradiction
+      have heq : e_inner = _ := shape_K_eq h
+      subst heq
+      rfl
+  | .G1 e_inner => by
+      cases a <;> simp [ExpressionInclusion] at h ; try contradiction
+      have heq : e_inner = _ := shape_K_eq h
+      subst heq
+      rfl
+
 lemma keyPartsMonotone {s : Shape} (p1 p2 : Expression s) (h : p1 ⊆ p2) :
   extractKeys p1 ⊆ extractKeys p2 := by
   induction p1 with
@@ -346,12 +474,13 @@ lemma keyPartsMonotone {s : Shape} (p1 p2 : Expression s) (h : p1 ⊆ p2) :
       · simp [extractKeys]
   | G0 e ih_e =>
       cases p2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
-      have heq : e = _ := eq_of_beq h
+      have heq : e = _ := shape_K_eq h
       subst heq
+      -- Now the goal is {G0 e} ⊆ {G0 e}, which is solved automatically by simp!
       simp [extractKeys]
-  | G1 e ih =>
+  | G1 e ih_e =>
       cases p2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
-      have heq : e = _ := eq_of_beq h
+      have heq : e = _ := shape_K_eq h
       subst heq
       simp [extractKeys]
   | Perm z e1 e2 ih_z ih_e1 ih_e2 =>
@@ -371,6 +500,8 @@ lemma hideEncryptedSmallerValue {s : Shape} (keys : Finset (Expression Shape.Key
   case Enc s ek e ih1 ih2 =>
     split <;> try simp [ExpressionInclusion, hideEncrypted]
     assumption
+  case G0 k ih => exact ExpressionInclusionRfl k
+  case G1 k ih => exact ExpressionInclusionRfl k
 
 -- Lemma 1: The universe of keys extracted from a smaller expression is a subset
 -- of the universe extracted from a larger expression.
@@ -409,12 +540,12 @@ lemma keySubtermsMonotone {s : Shape} (p1 p2 : Expression s) (h : p1 ⊆ p2) :
         exact Finset.Subset.refl _
   | G0 e ih_e =>
       cases p2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
-      have heq : e = _ := eq_of_beq h
+      have heq : e = _ := shape_K_eq h
       subst heq
       simp [keySubterms]
   | G1 e ih_e =>
       cases p2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
-      have heq : e = _ := eq_of_beq h
+      have heq : e = _ := shape_K_eq h
       subst heq
       simp [keySubterms]
   -- | HiddenG0 k =>

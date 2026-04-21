@@ -197,8 +197,12 @@ lemma getMaxVarMonotone {s : Shape} (e1 e2 : Expression s) (H : e1 ⊆ e2) : get
     cases e2 <;> simp [getMaxVar]
   case Hidden.Hidden =>
     rw [H]
-  case G0.G0 => rw [H]
-  case G1.G1 => rw [H]
+  case G0.G0 ih_e e_inner =>
+    apply ih_e
+    exact H
+  case G1.G1 ih_e e_inner =>
+    apply ih_e
+    exact H
 
 def evalBitExpr (bVars : ℕ -> Bool) (e : BitExpr) : Bool :=
   match e with

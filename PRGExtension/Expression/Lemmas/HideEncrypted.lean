@@ -11,13 +11,16 @@ def hideEncryptedS {s : Shape} (keys : Set (Expression Shape.KeyS)) (p : Express
   | Expression.Perm b e1 e2 => Expression.Perm b (hideEncryptedS keys e1) (hideEncryptedS keys e2)
   | Expression.Enc k e =>
     open Classical in
+    let k' := hideEncryptedS keys k
     if k ∈ keys
-    then Expression.Enc k (hideEncryptedS keys e)
-    else Expression.Hidden k
+    then Expression.Enc k' (hideEncryptedS keys e)
+    else Expression.Hidden k'
   -- G0 and G1 no longer have "Hidden" counterparts.
   -- They simply evaluate to themselves!
-  | Expression.G0 k => Expression.G0 k
-  | Expression.G1 k => Expression.G1 k
+  -- | Expression.G0 k => Expression.G0 k
+  -- | Expression.G1 k => Expression.G1 k
+  | Expression.G0 e => Expression.G0 (hideEncryptedS keys e)
+  | Expression.G1 e => Expression.G1 (hideEncryptedS keys e)
   | p => p
 
 noncomputable
@@ -59,24 +62,56 @@ lemma hideEncryptedEqS {s : Shape} (keys : Finset (Expression Shape.KeyS)) (p : 
     simp [ih1, ih2]
   case Enc k e ih1 ih2 =>
     split <;> simp [ih1, ih2]
+  case G0 e ih =>
+    rw [ih]
+    simp [hideEncrypted]
+  case G1 e ih =>
+    rw [ih]
+    simp [hideEncrypted]
 
 lemma hideEncryptedUnivAux {s : Shape} (keys Z : Set (Expression Shape.KeyS)) (p : Expression s) :
   (↑(allParts p) ⊆ Z) ->
   hideEncryptedS keys p = hideEncryptedS (keys ∩ Z) p := by
   induction p <;> simp [hideEncryptedS, hideEncrypted, allParts] <;> try tauto
+  case G0 e ih =>
+    intro h
+    -- Explicitly prove the subset condition for the inner expression
+    have h_sub : ↑(allParts e) ⊆ Z := by
+      intro x hx
+      apply h
+      -- simp knows that if x ∈ A, then x ∈ insert y A
+      simp [hx]
+    -- Use it to rewrite with the induction hypothesis
+    rw [ih h_sub]
+  case G1 e ih =>
+    intro h
+    have h_sub : ↑(allParts e) ⊆ Z := by
+      intro x hx
+      apply h
+      simp [hx]
+    rw [ih h_sub]
   case Enc e1 e2 ih1 ih2 =>
     intro h₁ h₂
+    -- Extract the fact that e1 is in Z (since all parts of e1 are in Z)
+    have he1_Z : e1 ∈ Z := h₂ (self_in_allParts e1)
     split
     next heq =>
-      have h := heq
-      rw [ite_cond_eq_true] <;> simp
-      rw [ih2]
-      assumption
-      constructor <;> try assumption
-      exact h₂ (self_in_allParts e1)
+      -- We are in the branch where e1 ∈ keys.
+      -- We explicitly prove the right-hand side's `if` condition is true!
+      have h_intersect : e1 ∈ keys ∩ Z := ⟨heq, he1_Z⟩
+      -- simp sees the proof, collapses the `if`, and splits the Enc equality into an ∧
+      simp [h_intersect]
+      -- Our two induction hypotheses perfectly solve the left and right children!
+      rw [ih1 h₂, ih2 h₁]
+      exact ⟨rfl, rfl⟩
     next hn =>
-      rw [ite_cond_eq_false] ; simp
-      tauto
+      -- We are in the branch where e1 ∉ keys.
+      -- We prove the right-hand side's `if` condition is false!
+      have h_intersect : ¬(e1 ∈ keys ∩ Z) := fun h => hn h.1
+      simp [h_intersect]
+      rw [ih1 h₂]
+
+  -- Commented Out -  artifact from trying to prove an overly strong assumption
   -- case G0 k ih =>
   --   intro hZ
   --   have hk_in_Z : k ∈ Z := by
@@ -148,27 +183,31 @@ def hideEncryptedPush {shape : Shape} (e1 e2 : Expression shape) (eb : Expressio
 
 lemma hideEncryptedSSmallerValue {s : Shape} (keys : Set (Expression Shape.KeyS)) (p : Expression s) : hideEncryptedS keys p ⊆ p := by
   induction p <;> simp [hideEncryptedS, ExpressionInclusion]
-  case Pair p1 p2 hp1 hp2 => simp [hp1, hp2]
+  case Pair p1 p2 hp1 hp2 =>
+    simp [hp1, hp2]
   case Perm b p1 p2 hp1 hp2 =>
     simp [p2, hp1, hp2, ExpressionInclusionRfl]
-  case Enc k p hp =>
-    rw [apply_ite ExpressionInclusion]
-    split <;> simp [ExpressionInclusion, hp]
-  -- case G0 k ih =>
-  --   -- Split the `if k ∈ keys` statement into its True and False realities
-  --   split
-  --   · -- True branch: The 'if' evaluates to k.G0.
-  --     -- We now need to prove `ExpressionInclusion k.G0 k.G0 = true`, which is reflexive!
-  --     exact ExpressionInclusionRfl _
-  --   · -- False branch: The 'if' evaluates to k.HiddenG0.
-  --     -- We need to prove `ExpressionInclusion k.HiddenG0 k.G0 = true`.
-  --     -- This should be true by the very definition of your inclusion function.
-  --     simp [ExpressionInclusion]
+  case G0 e ih =>
+    exact ih
+  case G1 e ih =>
+    simp [ih]
+  case Enc k e ih_k ih_e =>
+    split
+    ·
+      have heq : hideEncryptedS keys k = k := shape_K_eq ih_k
+      rw [heq]
+      simp [ExpressionInclusion, ih_e]
 
-  -- case G1 k ih =>
-  --   split
-  --   · exact ExpressionInclusionRfl _
-  --   · simp [ExpressionInclusion]
+    ·
+      have heq : hideEncryptedS keys k = k := shape_K_eq ih_k
+      rw [heq]
+      simp [ExpressionInclusion, ih_e]
+
+lemma hideEncryptedS_K (keys : Set (Expression 𝕂)) (k : Expression 𝕂) :
+  hideEncryptedS keys k = k := by
+  -- hideEncryptedSSmallerValue proves structural inclusion (⊆).
+  -- shape_K_eq promotes that structural inclusion to strict equality for Keys!
+  exact shape_K_eq (hideEncryptedSSmallerValue keys k)
 
 lemma hideKeys2SmallerValue {s : Shape} (keys : Set (Expression Shape.KeyS)) (p : Expression s) : hideSelectedS keys p ⊆ p := by
   simp [hideSelectedS]

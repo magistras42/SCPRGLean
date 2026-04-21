@@ -1,5 +1,6 @@
 import PRGExtension.Expression.ComputationalSemantics.Def
 import PRGExtension.ComputationalIndistinguishability.Def
+import PRGExtension.Expression.SymbolicIndistinguishability
 
 import SymbolicGarbledCircuitsInLean.VCVio2.VCVio.OracleComp.OracleSpec
 import SymbolicGarbledCircuitsInLean.VCVio2.VCVio.OracleComp.OracleComp
@@ -49,5 +50,31 @@ def seededPrgIdealOracle : famSeededOracle (fun κ ↦ oracleSpecPrg κ) := {
 -- indistinguishable from the ideal random distribution.
 def prgSchemeSecure (IsPolyTime : PolyFamOracleCompPred) (prg : prgScheme) : Prop :=
   CompIndistinguishabilitySeededOracle IsPolyTime (seededPrgRealOracle prg) seededPrgIdealOracle
+
+/--
+  The Computational Soundness of the PRG Idealization Step.
+  If the PRG is secure, then the symbolic idealization of G0 and G1
+  into fresh dummy keys (idx0, idx1) results in computationally indistinguishable distributions.
+-/
+axiom idealize_PRG_soundness {s : Shape}
+  (enc : encryptionScheme)
+  (prg : prgScheme)
+  (e : Expression s)
+  (targetSeed : Expression Shape.KeyS)
+  (idx0 idx1 : ℕ)
+  (IsPolyTime : PolyFamOracleCompPred) :
+  -- 1. The PRG scheme is computationally secure
+  prgSchemeSecure IsPolyTime prg →
+  -- 2. The adversary does not know the seed
+  (targetSeed ∉ adversaryKeys e) →
+  -- 3. The dummy indices represent independent randomness
+  (idx0 ≠ idx1) →
+  -- 4. Both dummy indices are completely fresh to the expression
+  (Expression.VarK idx0 ∉ keySubterms e) →
+  (Expression.VarK idx1 ∉ keySubterms e) →
+  -- THEN: The real evaluation is computationally indistinguishable from the idealized evaluation.
+  CompIndistinguishabilityDistr IsPolyTime
+    (fun κ => exprToDistr (enc κ) (prg κ) e)
+    (fun κ => exprToDistr (enc κ) (prg κ) (replacePRG targetSeed idx0 idx1 e))
 
 end PRG

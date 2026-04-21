@@ -77,9 +77,9 @@ lemma makeKeySwapInv (f : ℕ → Bool) (x : ℕ) :
 def keySwapBijective (f : ℕ → Bool) : Function.Bijective (makeKeySwap f) := by
   constructor
   · apply Function.LeftInverse.injective
-    apply makeKeySwapInv
+    exact makeKeySwapInv f
   · apply Function.RightInverse.surjective
-    apply makeKeySwapInv
+    exact makeKeySwapInv f
 
 def makeVarRenaming (f : ℕ → Bool) : varRenaming  :=
   ⟨bitPerm f, makeKeySwap f⟩

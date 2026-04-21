@@ -97,29 +97,28 @@ def reductionToOracle
   | Expression.G1 e => do
     let e' ← reductionToOracle enc prg kVars bVars e key₀
     return prg.prg1 e'
-  | Expression.HiddenG0 _ => do
-    let x <- sample (PMF.uniformOfFintype (BitVector κ))
-    return x
-  | Expression.HiddenG1 _ => do
-    let x <- sample (PMF.uniformOfFintype (BitVector κ))
-    return x
+  -- | Expression.HiddenG0 _ => do
+  --   let x <- sample (PMF.uniformOfFintype (BitVector κ))
+  --   return x
+  -- | Expression.HiddenG1 _ => do
+  --   let x <- sample (PMF.uniformOfFintype (BitVector κ))
+  --   return x
   | Expression.Hidden (s := s) (Expression.G0 ek) => do
     let key ← reductionToOracle enc prg kVars bVars (Expression.G0 ek) key₀
     sample (enc.encrypt key ones)
   | Expression.Hidden (s := s) (Expression.G1 ek) => do
     let key ← reductionToOracle enc prg kVars bVars (Expression.G1 ek) key₀
     sample (enc.encrypt key ones)
-  | Expression.Hidden (s := s) (Expression.HiddenG0 ek) => do
-    let key ← reductionToOracle enc prg kVars bVars (Expression.HiddenG0 ek) key₀
-    sample (enc.encrypt key ones)
-  | Expression.Hidden (s := s) (Expression.HiddenG1 ek) => do
-    let key ← reductionToOracle enc prg kVars bVars (Expression.HiddenG1 ek) key₀
-    sample (enc.encrypt key ones)
+  -- | Expression.Hidden (s := s) (Expression.HiddenG0 ek) => do
+  --   let key ← reductionToOracle enc prg kVars bVars (Expression.HiddenG0 ek) key₀
+  --   sample (enc.encrypt key ones)
+  -- | Expression.Hidden (s := s) (Expression.HiddenG1 ek) => do
+  --   let key ← reductionToOracle enc prg kVars bVars (Expression.HiddenG1 ek) key₀
+  --   sample (enc.encrypt key ones)
 
 lemma reductionToOracleSimulateEq {κ : ℕ} (enc : encryptionFunctions κ) (prg : prgFunctions κ) (kVars : (ℕ -> BitVector κ)) (bVars : ℕ -> Bool)
   {shape : Shape} (e : Expression shape) (key₀ : ℕ) (oracleKey : BitVector κ)
   (H : (Expression.VarK key₀) ∉ keySubterms e):
-
   OracleComp.simulateQ (addRandom (indCpaOracleImpl Side.L κ enc oracleKey))
     (reductionToOracle enc prg kVars bVars e key₀)
   =
@@ -238,20 +237,20 @@ lemma reductionToOracleSimulateEq {κ : ℕ} (enc : encryptionFunctions κ) (prg
         rw [PMF.bind_bind]
         -- 3. Use `simp only` to cleanly eliminate the `pure` without unfolding anything else
         simp only [PMF.pure_bind]
-      | HiddenG0 ek =>
-        rw [OracleComp.simulateQ_bind, ih_k H.left]
-        delta Function.comp
-        simp [reductionToOracle, evalExpr, encryptPMFOracle, sample, addRandom, innerQuery]
-        change (liftM _ >>= fun x ↦ liftM (enc.encrypt x e_val)) = _
-        rw [← lifting]
-        congr 1
-      | HiddenG1 ek =>
-        rw [OracleComp.simulateQ_bind, ih_k H.left]
-        delta Function.comp
-        simp [reductionToOracle, evalExpr, encryptPMFOracle, sample, addRandom, innerQuery]
-        change (liftM _ >>= fun x ↦ liftM (enc.encrypt x e_val)) = _
-        rw [← lifting]
-        congr 1
+      -- | HiddenG0 ek =>
+      --   rw [OracleComp.simulateQ_bind, ih_k H.left]
+      --   delta Function.comp
+      --   simp [reductionToOracle, evalExpr, encryptPMFOracle, sample, addRandom, innerQuery]
+      --   change (liftM _ >>= fun x ↦ liftM (enc.encrypt x e_val)) = _
+      --   rw [← lifting]
+      --   congr 1
+      -- | HiddenG1 ek =>
+      --   rw [OracleComp.simulateQ_bind, ih_k H.left]
+      --   delta Function.comp
+      --   simp [reductionToOracle, evalExpr, encryptPMFOracle, sample, addRandom, innerQuery]
+      --   change (liftM _ >>= fun x ↦ liftM (enc.encrypt x e_val)) = _
+      --   rw [← lifting]
+      --   congr 1
     case Hidden s e1 ih =>
       cases e1 with
       | VarK x =>
@@ -292,22 +291,22 @@ lemma reductionToOracleSimulateEq {κ : ℕ} (enc : encryptionFunctions κ) (prg
         change PMF.bind (PMF.bind _ _) _ = _
         rw [PMF.bind_bind]
         simp only [PMF.pure_bind]
-      | HiddenG0 ek =>
-        unfold reductionToOracle
-        rw [OracleComp.simulateQ_bind, ih H]
-        delta Function.comp
-        simp [evalExpr, sample]
-        change (liftM _ >>= fun x ↦ liftM (enc.encrypt x ones)) = _
-        rw [← lifting]
-        congr 1
-      | HiddenG1 ek =>
-        unfold reductionToOracle
-        rw [OracleComp.simulateQ_bind, ih H]
-        delta Function.comp
-        simp [evalExpr, sample]
-        change (liftM _ >>= fun x ↦ liftM (enc.encrypt x ones)) = _
-        rw [← lifting]
-        congr 1
+      -- | HiddenG0 ek =>
+      --   unfold reductionToOracle
+      --   rw [OracleComp.simulateQ_bind, ih H]
+      --   delta Function.comp
+      --   simp [evalExpr, sample]
+      --   change (liftM _ >>= fun x ↦ liftM (enc.encrypt x ones)) = _
+      --   rw [← lifting]
+      --   congr 1
+      -- | HiddenG1 ek =>
+      --   unfold reductionToOracle
+      --   rw [OracleComp.simulateQ_bind, ih H]
+      --   delta Function.comp
+      --   simp [evalExpr, sample]
+      --   change (liftM _ >>= fun x ↦ liftM (enc.encrypt x ones)) = _
+      --   rw [← lifting]
+      --   congr 1
     case G0 e ih =>
       unfold reductionToOracle
       rw [OracleComp.simulateQ_bind, ih H]
@@ -333,28 +332,28 @@ lemma reductionToOracleSimulateEq {κ : ℕ} (enc : encryptionFunctions κ) (prg
         simp only [evalExpr]
       -- Unfold the monad wrappers
       simp [OptionT.bind, OptionT.pure, OptionT.lift, OptionT.mk, Bind.bind, pure, monadLift, liftM, MonadLift.monadLift]
-    case HiddenG0 e ih =>
-      unfold reductionToOracle evalExpr
-      -- 1. Apply your induction hypothesis (using the perfectly preserved H)
-      rw [OracleComp.simulateQ_bind]
-      -- 2. Clean up function composition
-      simp only [Function.comp_def, Function.comp_apply]
-      -- 3. Evaluate the random sample by unfolding 'sample' and 'addRandom'
-      -- This immediately closes the goal you are seeing!
-      simp [sample, addRandom, OracleComp.simulateQ_pure, liftM, MonadLift.monadLift]
-      -- (If any definitional equalities remain, rfl will sweep them up)
-      rfl
-    case HiddenG1 e ih =>
-      unfold reductionToOracle evalExpr
-      -- 1. Apply your induction hypothesis (using the perfectly preserved H)
-      rw [OracleComp.simulateQ_bind]
-      -- 2. Clean up function composition
-      simp only [Function.comp_def, Function.comp_apply]
-      -- 3. Evaluate the random sample by unfolding 'sample' and 'addRandom'
-      -- This immediately closes the goal you are seeing!
-      simp [sample, addRandom, OracleComp.simulateQ_pure, liftM, MonadLift.monadLift]
-      -- (If any definitional equalities remain, rfl will sweep them up)
-      rfl
+    -- case HiddenG0 e ih =>
+    --   unfold reductionToOracle evalExpr
+    --   -- 1. Apply your induction hypothesis (using the perfectly preserved H)
+    --   rw [OracleComp.simulateQ_bind]
+    --   -- 2. Clean up function composition
+    --   simp only [Function.comp_def, Function.comp_apply]
+    --   -- 3. Evaluate the random sample by unfolding 'sample' and 'addRandom'
+    --   -- This immediately closes the goal you are seeing!
+    --   simp [sample, addRandom, OracleComp.simulateQ_pure, liftM, MonadLift.monadLift]
+    --   -- (If any definitional equalities remain, rfl will sweep them up)
+    --   rfl
+    -- case HiddenG1 e ih =>
+    --   unfold reductionToOracle evalExpr
+    --   -- 1. Apply your induction hypothesis (using the perfectly preserved H)
+    --   rw [OracleComp.simulateQ_bind]
+    --   -- 2. Clean up function composition
+    --   simp only [Function.comp_def, Function.comp_apply]
+    --   -- 3. Evaluate the random sample by unfolding 'sample' and 'addRandom'
+    --   -- This immediately closes the goal you are seeing!
+    --   simp [sample, addRandom, OracleComp.simulateQ_pure, liftM, MonadLift.monadLift]
+    --   -- (If any definitional equalities remain, rfl will sweep them up)
+    --   rfl
 
 lemma bindNothing (y : PMF X2) (z : OptionT PMF X) : z = (do let _ <- liftM y; z) := by
   simp [Bind.bind]
@@ -497,29 +496,11 @@ lemma reductionToOracleSimulateEq2 {κ : ℕ} (enc : encryptionFunctions κ) (pr
         simp [PMF.bind_bind, PMF.pure_bind]
         congr 1
         funext a
-        -- 11. Unfold removeOneKey, and push the hideSelectedS wrapper through the .G0 constructor
         simp only [removeOneKey, hideSelectedS]
-        -- 12. Now that the shell is pushed down, evalExpr can clearly see the .G0 constructor. Unfold it!
-        -- (Since `ek` is a variable, evalExpr will safely stop expanding when it hits the base `ek`).
-        -- 1. Unfold hideEncryptedS to expose the if-statement
         simp only [hideEncryptedS]
-        -- 2. Split the if-statement into the True and False branches
-        split_ifs with h_if
-        · -- BRANCH 1: The condition is True (ek is NOT the key).
-          -- The expression reduced to ek.G0, so evalExpr can safely unfold!
-          simp only [evalExpr]
-          simp only [Bind.bind]
-          -- Smash the exposed pure and bind monads together
-          simp only [PMF.bind_bind, PMF.pure_bind]
-        · -- BRANCH 2: The condition is False (ek IS the key).
-          -- We must prove this contradicts your hypothesis Hk.
-          -- First, simplify the false condition into a clean equality:
-          simp at h_if
-          -- Substitute that equality directly into Hk
-          rw [h_if] at Hk
-          -- Finally, force Lean to look inside the subterms definition.
-          -- This reveals `VarK key₀ ∉ {VarK key₀}`, which Lean knows is False, instantly closing the goal!
-          simp [keySubterms] at Hk
+        simp only [evalExpr]
+        simp only [Bind.bind]
+        simp only [PMF.bind_bind, PMF.pure_bind]
       | G1 ek =>
         change OracleComp.simulateQ _ (reductionToOracle enc prg kVars bVars e key₀ >>= fun x ↦ reductionToOracle enc prg kVars bVars ek.G1 key₀ >>= _) = _
         simp only [OracleComp.simulateQ_bind, Function.comp]
@@ -538,44 +519,35 @@ lemma reductionToOracleSimulateEq2 {κ : ℕ} (enc : encryptionFunctions κ) (pr
         funext a
         simp only [removeOneKey, hideSelectedS]
         simp only [hideEncryptedS]
-        split_ifs with h_if
-        · -- BRANCH 1: The condition is True (ek is NOT the key).
-          -- The expression reduced to ek.G1, so evalExpr can safely unfold!
-          simp only [evalExpr]
-          simp only [Bind.bind]
-          simp only [PMF.bind_bind, PMF.pure_bind]
-        · -- BRANCH 2: The condition is False (ek IS the key).
-          -- We must prove this contradicts your hypothesis Hk.
-          -- First, simplify the false condition into a clean equality:
-          simp at h_if
-          rw [h_if] at Hk
-          simp [keySubterms] at Hk
-      | HiddenG0 ek =>
-        change OracleComp.simulateQ _ (reductionToOracle enc prg kVars bVars e key₀ >>= fun x ↦ reductionToOracle enc prg kVars bVars ek.HiddenG0 key₀ >>= _) = _
-        simp only [OracleComp.simulateQ_bind, Function.comp]
-        simp only [ih_e He, ih_k Hk]
-        simp [encryptPMFOracle, sample, addRandom, innerQuery, removeOneKey, hideSelectedS, hideEncryptedS]
-        delta Function.comp
-        simp only [OracleComp.simulateQ_bind]
-        erw [ih_k Hk]
-        delta Function.comp
-        simp [encryptPMFOracle, sample, addRandom, innerQuery, evalExpr, hideEncryptedS]
-        dsimp [prodImpl, randImpl]
-        simp only [← lifting]
-        congr 1
-      | HiddenG1 ek =>
-        change OracleComp.simulateQ _ (reductionToOracle enc prg kVars bVars e key₀ >>= fun x ↦ reductionToOracle enc prg kVars bVars ek.HiddenG1 key₀ >>= _) = _
-        simp only [OracleComp.simulateQ_bind, Function.comp]
-        simp only [ih_e He, ih_k Hk]
-        simp [encryptPMFOracle, sample, addRandom, innerQuery, removeOneKey, hideSelectedS, hideEncryptedS]
-        delta Function.comp
-        simp only [OracleComp.simulateQ_bind]
-        erw [ih_k Hk]
-        delta Function.comp
-        simp [encryptPMFOracle, sample, addRandom, innerQuery, evalExpr, hideEncryptedS]
-        dsimp [prodImpl, randImpl]
-        simp only [← lifting]
-        congr 1
+        simp only [evalExpr]
+        simp only [Bind.bind]
+        simp only [PMF.bind_bind, PMF.pure_bind]
+      -- | HiddenG0 ek =>
+      --   change OracleComp.simulateQ _ (reductionToOracle enc prg kVars bVars e key₀ >>= fun x ↦ reductionToOracle enc prg kVars bVars ek.HiddenG0 key₀ >>= _) = _
+      --   simp only [OracleComp.simulateQ_bind, Function.comp]
+      --   simp only [ih_e He, ih_k Hk]
+      --   simp [encryptPMFOracle, sample, addRandom, innerQuery, removeOneKey, hideSelectedS, hideEncryptedS]
+      --   delta Function.comp
+      --   simp only [OracleComp.simulateQ_bind]
+      --   erw [ih_k Hk]
+      --   delta Function.comp
+      --   simp [encryptPMFOracle, sample, addRandom, innerQuery, evalExpr, hideEncryptedS]
+      --   dsimp [prodImpl, randImpl]
+      --   simp only [← lifting]
+      --   congr 1
+      -- | HiddenG1 ek =>
+      --   change OracleComp.simulateQ _ (reductionToOracle enc prg kVars bVars e key₀ >>= fun x ↦ reductionToOracle enc prg kVars bVars ek.HiddenG1 key₀ >>= _) = _
+      --   simp only [OracleComp.simulateQ_bind, Function.comp]
+      --   simp only [ih_e He, ih_k Hk]
+      --   simp [encryptPMFOracle, sample, addRandom, innerQuery, removeOneKey, hideSelectedS, hideEncryptedS]
+      --   delta Function.comp
+      --   simp only [OracleComp.simulateQ_bind]
+      --   erw [ih_k Hk]
+      --   delta Function.comp
+      --   simp [encryptPMFOracle, sample, addRandom, innerQuery, evalExpr, hideEncryptedS]
+      --   dsimp [prodImpl, randImpl]
+      --   simp only [← lifting]
+      --   congr 1
     case Hidden s k ih_k =>
       cases k with
       | VarK x =>
@@ -610,13 +582,14 @@ lemma reductionToOracleSimulateEq2 {κ : ℕ} (enc : encryptionFunctions κ) (pr
         simp [removeOneKey, hideSelectedS, hideEncryptedS, evalExpr, sample, h_neq]
         -- 6. Unfold addRandom to expose the underlying `prodImpl`
         unfold addRandom
-        -- 7. Use `change` to bypass the equation compiler bug AND simultaneously
-        -- evaluate `randImpl` into `liftM`. Now it perfectly matches `lifting`!
-        change (do
-          let x ← liftM ((evalExpr enc prg (subst2 key₀ oracleKey kVars) bVars ek).bind fun e' ↦ PMF.pure (prg.prg0 e'))
-          liftM (enc.encrypt x ones)) = _
-        -- 8. Apply the custom lifting lemma from Def.lean!
+        -- 7. Use `>>=` instead of `do` notation to bypass the Bind metavariable trap!
+        -- Notice we MUST keep hideEncryptedS here because change requires strict definitional equality.
+        change (
+          liftM ((evalExpr enc prg (subst2 key₀ oracleKey kVars) bVars (hideEncryptedS {Expression.VarK key₀}ᶜ ek)).bind fun e' ↦ PMF.pure (prg.prg0 e'))
+          >>= fun x ↦ liftM (enc.encrypt x ones)
+        ) = _
         rw [← lifting]
+        rw [hideEncryptedS_K]
         -- 9. Crush the remaining pure PMF binds to perfectly match the RHS
         simp [PMF.bind_bind, PMF.pure_bind]
       | G1 ek =>
@@ -631,93 +604,88 @@ lemma reductionToOracleSimulateEq2 {κ : ℕ} (enc : encryptionFunctions κ) (pr
           simp [keySubterms] at H
         simp [removeOneKey, hideSelectedS, hideEncryptedS, evalExpr, sample, h_neq]
         unfold addRandom
-        change (do
-          let x ← liftM ((evalExpr enc prg (subst2 key₀ oracleKey kVars) bVars ek).bind fun e' ↦ PMF.pure (prg.prg1 e'))
-          liftM (enc.encrypt x ones)) = _
+        change (
+          liftM ((evalExpr enc prg (subst2 key₀ oracleKey kVars) bVars (hideEncryptedS {Expression.VarK key₀}ᶜ ek)).bind fun e' ↦ PMF.pure (prg.prg1 e'))
+          >>= fun x ↦ liftM (enc.encrypt x ones)
+        ) = _
         rw [← lifting]
+        rw [hideEncryptedS_K]
         simp [PMF.bind_bind, PMF.pure_bind]
-      | HiddenG0 ek =>
-        -- 1. Match the hypothesis required by the IH
-        have h_g0 : Expression.VarK key₀ ∉ keySubterms (Expression.HiddenG0 ek) := by
-          simp only [keySubterms]; exact H
-        -- 2. Unfold ONLY the top-level reduction
-        unfold reductionToOracle
-        -- 3. Distribute simulateQ and apply the IH
-        rw [OracleComp.simulateQ_bind, ih_k h_g0]
-        delta Function.comp
-        -- 4. Prove h_neq to unblock the if-then-else created by hideEncryptedS
-        have h_neq : ek ≠ Expression.VarK key₀ := by
-          intro h_eq
-          rw [h_eq] at H
-          simp [keySubterms] at H
-        -- 5. Pass h_neq to simp so it can destroy the 'if' and unfold G0
-        simp [removeOneKey, hideSelectedS, hideEncryptedS, evalExpr, sample, h_neq]
-        -- 6. Unfold addRandom to expose the underlying `prodImpl`
-        unfold addRandom
-        -- 7. Use `change` to bypass the equation compiler bug AND simultaneously
-        -- evaluate `randImpl` into `liftM`.
-        -- Notice how this now uses uniformOfFintype instead of evalExpr!
-        change (do
-          let x ← liftM (PMF.uniformOfFintype (BitVector κ))
-          liftM (enc.encrypt x ones)) = _
-        -- 8. Apply the custom lifting lemma from Def.lean!
-        rw [← lifting]
-        -- 9. Crush the remaining pure PMF binds to perfectly match the RHS
-        simp [PMF.bind_bind, PMF.pure_bind]
-        rfl
-      | HiddenG1 ek =>
-        have h_g1 : Expression.VarK key₀ ∉ keySubterms (Expression.HiddenG1 ek) := by
-          simp only [keySubterms]; exact H
-        unfold reductionToOracle
-        rw [OracleComp.simulateQ_bind, ih_k h_g1]
-        delta Function.comp
-        have h_neq : ek ≠ Expression.VarK key₀ := by
-          intro h_eq
-          rw [h_eq] at H
-          simp [keySubterms] at H
-        simp [removeOneKey, hideSelectedS, hideEncryptedS, evalExpr, sample, h_neq]
-        unfold addRandom
-        change (do
-          let x ← liftM (PMF.uniformOfFintype (BitVector κ))
-          liftM (enc.encrypt x ones)) = _
-        rw [← lifting]
-        simp [PMF.bind_bind, PMF.pure_bind]
-        rfl
-    -- UPDATE: Added Top Level PRG branches!
-    case G0 e ih => sorry
-      -- -- 1. Prove e is not exactly VarK key₀ to resolve the if-then-else in the reduction
-      --   have h_neq : e ≠ Expression.VarK key₀ := by
+      -- | HiddenG0 ek =>
+      --   -- 1. Match the hypothesis required by the IH
+      --   have h_g0 : Expression.VarK key₀ ∉ keySubterms (Expression.HiddenG0 ek) := by
+      --     simp only [keySubterms]; exact H
+      --   -- 2. Unfold ONLY the top-level reduction
+      --   unfold reductionToOracle
+      --   -- 3. Distribute simulateQ and apply the IH
+      --   rw [OracleComp.simulateQ_bind, ih_k h_g0]
+      --   delta Function.comp
+      --   -- 4. Prove h_neq to unblock the if-then-else created by hideEncryptedS
+      --   have h_neq : ek ≠ Expression.VarK key₀ := by
       --     intro h_eq
       --     rw [h_eq] at H
       --     simp [keySubterms] at H
-      --   -- 2. Unfold the top-level reduction and resolve the 'if' check
+      --   -- 5. Pass h_neq to simp so it can destroy the 'if' and unfold G0
+      --   simp [removeOneKey, hideSelectedS, hideEncryptedS, evalExpr, sample, h_neq]
+      --   -- 6. Unfold addRandom to expose the underlying `prodImpl`
+      --   unfold addRandom
+      --   -- 7. Use `change` to bypass the equation compiler bug AND simultaneously
+      --   -- evaluate `randImpl` into `liftM`.
+      --   -- Notice how this now uses uniformOfFintype instead of evalExpr!
+      --   change (do
+      --     let x ← liftM (PMF.uniformOfFintype (BitVector κ))
+      --     liftM (enc.encrypt x ones)) = _
+      --   -- 8. Apply the custom lifting lemma from Def.lean!
+      --   rw [← lifting]
+      --   -- 9. Crush the remaining pure PMF binds to perfectly match the RHS
+      --   simp [PMF.bind_bind, PMF.pure_bind]
+      --   rfl
+      -- | HiddenG1 ek =>
+      --   have h_g1 : Expression.VarK key₀ ∉ keySubterms (Expression.HiddenG1 ek) := by
+      --     simp only [keySubterms]; exact H
       --   unfold reductionToOracle
-      --   simp [h_neq, removeOneKey, hideSelectedS, hideEncryptedS, evalExpr]
-
-      --   -- 3. NEW: Unpack the OptionT/Functor layers AND push simulateQ through the bind.
-      --   -- (Note: If your library names the distribution lemma slightly differently,
-      --   -- you might need `OracleComp.simulate_bind` or `simulateQ_map` instead).
-      --   simp [Functor.map, OptionT.bind, OptionT.pure, OptionT.lift, OptionT.mk, Bind.bind, pure, OracleComp.simulateQ_bind]
-
-      --   -- 4. Now `simulateQ (...) (reductionToOracle ...)` is perfectly isolated. Fire the IH!
-      --   rw [ih H]
-
-      --   -- 5. Clean up the remaining PMF monad stacks to make LHS match RHS
-      --   simp [liftM, monadLift, MonadLift.monadLift, PMF.bind_bind, PMF.pure_bind]
+      --   rw [OracleComp.simulateQ_bind, ih_k h_g1]
+      --   delta Function.comp
+      --   have h_neq : ek ≠ Expression.VarK key₀ := by
+      --     intro h_eq
+      --     rw [h_eq] at H
+      --     simp [keySubterms] at H
+      --   simp [removeOneKey, hideSelectedS, hideEncryptedS, evalExpr, sample, h_neq]
+      --   unfold addRandom
+      --   change (do
+      --     let x ← liftM (PMF.uniformOfFintype (BitVector κ))
+      --     liftM (enc.encrypt x ones)) = _
+      --   rw [← lifting]
+      --   simp [PMF.bind_bind, PMF.pure_bind]
+      --   rfl
+    -- UPDATE: Added Top Level PRG branches!
+    case G0 e ih =>
+      unfold reductionToOracle
+      rw [OracleComp.simulateQ_bind, ih H]
+      simp only [removeOneKey, evalExpr]
+      simp_rw [Function.comp_def]
+      simp only [OracleComp.simulateQ_pure]
+      simp only [hideSelectedS, hideEncryptedS, evalExpr]
+      rw [lifting]
+      congr
+      funext x
+      change OptionT.mk (PMF.pure (some (prg.prg0 x))) = OptionT.lift (PMF.pure (prg.prg0 x))
+      simp [pure, liftM, MonadLift.monadLift, OptionT.pure, OptionT.lift, PMF.pure_bind]
       --   try simp only [Bind.bind]
-
-    case G1 e ih => sorry
-      -- unfold reductionToOracle
-      -- simp [removeOneKey, hideSelectedS, hideEncryptedS]
-      -- rw [OracleComp.simulateQ_bind, ih H]
-      -- simp only [Function.comp_def, Function.comp_apply]
-      -- try unfold Function.comp
-      -- simp only [OracleComp.simulateQ_pure]
-      -- conv =>
-      --   rhs
-      --   simp only [evalExpr]
-      -- simp [OptionT.bind, OptionT.pure, OptionT.lift, OptionT.mk, Bind.bind, pure, monadLift, liftM, MonadLift.monadLift]
-    case HiddenG0 e ih => sorry
+    case G1 e ih =>
+      -- The G1 case is perfectly symmetric to G0
+      unfold reductionToOracle
+      rw [OracleComp.simulateQ_bind, ih H]
+      simp only [removeOneKey, evalExpr]
+      simp_rw [Function.comp_def]
+      simp only [OracleComp.simulateQ_pure]
+      simp only [hideSelectedS, hideEncryptedS, evalExpr]
+      rw [lifting]
+      congr
+      funext x
+      change OptionT.mk (PMF.pure (some (prg.prg1 x))) = OptionT.lift (PMF.pure (prg.prg1 x))
+      simp [pure, liftM, MonadLift.monadLift, OptionT.pure, OptionT.lift, PMF.pure_bind]
+    -- case HiddenG0 e ih => sorry
       -- unfold reductionToOracle evalExpr
       -- simp [removeOneKey, hideSelectedS, hideEncryptedS]
       -- rw [OracleComp.simulateQ_bind, ih H]
@@ -725,7 +693,7 @@ lemma reductionToOracleSimulateEq2 {κ : ℕ} (enc : encryptionFunctions κ) (pr
       -- try unfold Function.comp
       -- simp [sample, addRandom, OracleComp.simulateQ_query, OracleComp.simulateQ_bind, OracleComp.simulateQ_pure, bind_pure, liftM, MonadLift.monadLift]
       -- try rfl
-    case HiddenG1 e ih => sorry
+    -- case HiddenG1 e ih => sorry
       -- unfold reductionToOracle evalExpr
       -- simp [removeOneKey, hideSelectedS, hideEncryptedS]
       -- rw [OracleComp.simulateQ_bind, ih H]
@@ -822,9 +790,8 @@ lemma reductionToOracleEq (key₀ : ℕ) (enc : encryptionScheme) (prg : prgSche
     apply resamplingLemma3
     omega
 
--- same question as above
 lemma reductionToOracleEq2 (key₀ : ℕ) (enc : encryptionScheme) (prg : prgScheme)
-  {shape : Shape} (e : Expression shape) (H : (Expression.VarK key₀) ∉ keySubterms e) :
+  {shape : Shape} (e : Expression shape) (H : (Expression.VarK key₀) ∉ extractKeys e) :
   compToDistrGen (seededIndCpaOracleImpl Side.R enc) (reductionHidingOneKey enc prg e key₀) =
   famDistrLift (exprToFamDistr enc prg (removeOneKey (Expression.VarK key₀) e))
   :=
@@ -858,7 +825,7 @@ theorem symbolicToSemanticIndistinguishabilityHidingOneKey
   (Hreduction : forall enc prg shape (expr : Expression shape) key₀, IsPolyTime (reductionHidingOneKey enc prg expr key₀))
   (enc : encryptionScheme) (HEncIndCpa : encryptionSchemeIndCpa IsPolyTime enc)
   {shape : Shape} (expr : Expression shape)
-  (k : Expression Shape.KeyS) (Hk : k ∉ keySubterms expr)
+  (k : Expression Shape.KeyS) (Hk : k ∉ extractKeys expr)
   : CompIndistinguishabilityDistr IsPolyTime (famDistrLift (exprToFamDistr enc prg expr)) (famDistrLift (exprToFamDistr enc prg (removeOneKey k expr)))
   := by
     let (Expression.VarK key₀) := k
