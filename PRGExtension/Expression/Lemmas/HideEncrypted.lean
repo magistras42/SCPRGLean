@@ -13,17 +13,11 @@ def hideEncryptedS {s : Shape} (keys : Set (Expression Shape.KeyS)) (p : Express
     open Classical in
     if k ∈ keys
     then Expression.Enc k (hideEncryptedS keys e)
-    else  Expression.Hidden k
-  | Expression.G0 k =>
-    open Classical in
-    if k ∈ keys
-    then Expression.G0 k
-    else Expression.HiddenG0 k
-  | Expression.G1 k =>
-    open Classical in
-    if k ∈ keys
-    then Expression.G1 k
-    else Expression.HiddenG1 k
+    else Expression.Hidden k
+  -- G0 and G1 no longer have "Hidden" counterparts.
+  -- They simply evaluate to themselves!
+  | Expression.G0 k => Expression.G0 k
+  | Expression.G1 k => Expression.G1 k
   | p => p
 
 noncomputable
@@ -46,8 +40,6 @@ def allParts {s : Shape} (p : Expression s) : Finset (Expression Shape.KeyS) :=
   | Expression.Perm _ p1 p2 => (allParts p1) ∪ (allParts p2)
   | Expression.Enc x e => (allParts e) ∪ allParts x
   | Expression.Hidden _ => {}
-  | Expression.HiddenG0 e => {Expression.HiddenG0 e}
-  | Expression.HiddenG1 e => {Expression.HiddenG1 e}
   | _ => {}
 
 -- obsolete because keys are recursive due to PRG trees
@@ -85,34 +77,34 @@ lemma hideEncryptedUnivAux {s : Shape} (keys Z : Set (Expression Shape.KeyS)) (p
     next hn =>
       rw [ite_cond_eq_false] ; simp
       tauto
-  case G0 k ih =>
-    intro hZ
-    have hk_in_Z : k ∈ Z := by
-      apply hZ
-      simp [allParts]
-      exact Or.inr (self_in_allParts k)
+  -- case G0 k ih =>
+  --   intro hZ
+  --   have hk_in_Z : k ∈ Z := by
+  --     apply hZ
+  --     simp [allParts]
+  --     exact Or.inr (self_in_allParts k)
 
-    -- Bypass `simp` struggling with `ite` conditions by using explicit branching:
-    by_cases h_keys : k ∈ keys
-    · -- True branch: we know k ∈ keys, and we know k ∈ Z.
-      have h_inter : k ∈ keys ∩ Z := ⟨h_keys, hk_in_Z⟩
-      simp [h_keys, h_inter]
-    · -- False branch: we know k ∉ keys. Thus it cannot be in the intersection.
-      have h_not_inter : ¬ (k ∈ keys ∩ Z) := fun h_contra => h_keys h_contra.1
-      simp [h_keys, h_not_inter]
+  --   -- Bypass `simp` struggling with `ite` conditions by using explicit branching:
+  --   by_cases h_keys : k ∈ keys
+  --   · -- True branch: we know k ∈ keys, and we know k ∈ Z.
+  --     have h_inter : k ∈ keys ∩ Z := ⟨h_keys, hk_in_Z⟩
+  --     simp [h_keys, h_inter]
+  --   · -- False branch: we know k ∉ keys. Thus it cannot be in the intersection.
+  --     have h_not_inter : ¬ (k ∈ keys ∩ Z) := fun h_contra => h_keys h_contra.1
+  --     simp [h_keys, h_not_inter]
 
-  case G1 k ih =>
-    intro hZ
-    have hk_in_Z : k ∈ Z := by
-      apply hZ
-      simp [allParts]
-      exact Or.inr (self_in_allParts k)
+  -- case G1 k ih =>
+  --   intro hZ
+  --   have hk_in_Z : k ∈ Z := by
+  --     apply hZ
+  --     simp [allParts]
+  --     exact Or.inr (self_in_allParts k)
 
-    by_cases h_keys : k ∈ keys
-    · have h_inter : k ∈ keys ∩ Z := ⟨h_keys, hk_in_Z⟩
-      simp [h_keys, h_inter]
-    · have h_not_inter : ¬ (k ∈ keys ∩ Z) := fun h_contra => h_keys h_contra.1
-      simp [h_keys, h_not_inter]
+  --   by_cases h_keys : k ∈ keys
+  --   · have h_inter : k ∈ keys ∩ Z := ⟨h_keys, hk_in_Z⟩
+  --     simp [h_keys, h_inter]
+  --   · have h_not_inter : ¬ (k ∈ keys ∩ Z) := fun h_contra => h_keys h_contra.1
+  --     simp [h_keys, h_not_inter]
 
 lemma hideEncryptedUniv {s : Shape} (keys : Set (Expression Shape.KeyS)) (p : Expression s) :
   hideEncryptedS  (keys ∩ allParts p) p = hideEncryptedS keys p := by
@@ -162,21 +154,21 @@ lemma hideEncryptedSSmallerValue {s : Shape} (keys : Set (Expression Shape.KeyS)
   case Enc k p hp =>
     rw [apply_ite ExpressionInclusion]
     split <;> simp [ExpressionInclusion, hp]
-  case G0 k ih =>
-    -- Split the `if k ∈ keys` statement into its True and False realities
-    split
-    · -- True branch: The 'if' evaluates to k.G0.
-      -- We now need to prove `ExpressionInclusion k.G0 k.G0 = true`, which is reflexive!
-      exact ExpressionInclusionRfl _
-    · -- False branch: The 'if' evaluates to k.HiddenG0.
-      -- We need to prove `ExpressionInclusion k.HiddenG0 k.G0 = true`.
-      -- This should be true by the very definition of your inclusion function.
-      simp [ExpressionInclusion]
+  -- case G0 k ih =>
+  --   -- Split the `if k ∈ keys` statement into its True and False realities
+  --   split
+  --   · -- True branch: The 'if' evaluates to k.G0.
+  --     -- We now need to prove `ExpressionInclusion k.G0 k.G0 = true`, which is reflexive!
+  --     exact ExpressionInclusionRfl _
+  --   · -- False branch: The 'if' evaluates to k.HiddenG0.
+  --     -- We need to prove `ExpressionInclusion k.HiddenG0 k.G0 = true`.
+  --     -- This should be true by the very definition of your inclusion function.
+  --     simp [ExpressionInclusion]
 
-  case G1 k ih =>
-    split
-    · exact ExpressionInclusionRfl _
-    · simp [ExpressionInclusion]
+  -- case G1 k ih =>
+  --   split
+  --   · exact ExpressionInclusionRfl _
+  --   · simp [ExpressionInclusion]
 
 lemma hideKeys2SmallerValue {s : Shape} (keys : Set (Expression Shape.KeyS)) (p : Expression s) : hideSelectedS keys p ⊆ p := by
   simp [hideSelectedS]

@@ -64,8 +64,6 @@ match e with
 | Expression.Eps => True
 | Expression.G0 e => allVarsSmallerThan e n
 | Expression.G1 e => allVarsSmallerThan e n
-| Expression.HiddenG0 e => allVarsSmallerThan e n
-| Expression.HiddenG1 e => allVarsSmallerThan e n
 
 def allVarsSmallerThanBExprMonotone {e : BitExpr} {n₁ : ℕ} {n₂ : ℕ} (h : n₁ ≤ n₂) (h' : allVarsSmallerThanBExpr e n₁) : allVarsSmallerThanBExpr e n₂ := by
   induction e
@@ -108,12 +106,6 @@ def allVarsSmallerThanMonotone {s : Shape} (e : Expression s) (n₁ : ℕ ) (n�
   case G1 e ih =>
     simp [allVarsSmallerThan] at h₂ ⊢
     exact ih h₂
-  case HiddenG0 k ih =>
-    simp [allVarsSmallerThan] at h₂ ⊢
-    exact ih h₂
-  case HiddenG1 k ih =>
-    simp [allVarsSmallerThan] at h₂ ⊢
-    exact ih h₂
 
 def getMaxVarBExpr : BitExpr -> ℕ
   | BitExpr.VarB k => k
@@ -130,8 +122,6 @@ def getMaxVar {s : Shape} : Expression s -> ℕ
   | Expression.Eps => 0
   | Expression.G0 e => getMaxVar e
   | Expression.G1 e => getMaxVar e
-  | Expression.HiddenG0 e => getMaxVar e
-  | Expression.HiddenG1 e => getMaxVar e
 
 lemma allVarsSmallerThanMaxBexpr (e : BitExpr) : allVarsSmallerThanBExpr e (getMaxVarBExpr e + 1) := by
   induction e
@@ -181,10 +171,6 @@ lemma allVarsSmallerThanMax {s : Shape} (e : Expression s) : allVarsSmallerThan 
     exact ih
   case G1 e ih =>
     exact ih
-  case HiddenG0 k ih =>
-    exact ih
-  case HiddenG1 k ih =>
-    exact ih
 
 lemma getMaxVarMonotone {s : Shape} (e1 e2 : Expression s) (H : e1 ⊆ e2) : getMaxVar e1 <= getMaxVar e2 :=
   by
@@ -212,11 +198,7 @@ lemma getMaxVarMonotone {s : Shape} (e1 e2 : Expression s) (H : e1 ⊆ e2) : get
   case Hidden.Hidden =>
     rw [H]
   case G0.G0 => rw [H]
-  case G0.HiddenG0 => rw [H]
   case G1.G1 => rw [H]
-  case G1.HiddenG1 => rw [H]
-  case HiddenG0.HiddenG0 => rw [H]
-  case HiddenG1.HiddenG1 => rw [H]
 
 def evalBitExpr (bVars : ℕ -> Bool) (e : BitExpr) : Bool :=
   match e with
@@ -262,11 +244,6 @@ def evalExpr (enc : encryptionFunctions κ) (prg : prgFunctions κ) (kVars : ℕ
   | Expression.G1 e => do
     let e' ← evalExpr enc prg kVars bVars e
     PMF.pure (prg.prg1 e')
-  -- IDEAL RANDOM ORACLE FOR REDACTED PRGS:
-  | Expression.HiddenG0 _ => do
-    uniformOfFintype (BitVector κ)
-  | Expression.HiddenG1 _ => do
-    uniformOfFintype (BitVector κ)
 
 def extendFin {k : ℕ} (default : X) (x : Fin k -> X) :  (ℕ -> X) :=
   fun i =>
@@ -337,24 +314,24 @@ lemma evalNoMatter {s : Shape} {κ : ℕ} (enc : encryptionFunctions κ) (prg : 
     simp [evalExpr]
     rw [He1] <;> try omega
     rw [He2] <;> try omega
-    rw [evalNoMatterBit l] <;> try omega
+    rw [evalNoMatterBit l] <;> omega
   case Enc k e Hk_ih He_ih =>
     --simp [getMaxVar] at Hl
     --simp [evalExpr]
     rw [He_ih] <;> try omega
-    rw [Hk_ih]; try omega
+    rw [Hk_ih]; omega
   case Hidden k Hk_ih =>
     -- simp [getMaxVar] at Hl
     -- simp [evalExpr]
-    rw [Hk_ih]; try omega
+    rw [Hk_ih]; omega
   case G0 k Hk_ih =>
     -- simp [getMaxVar] at Hl
     -- simp [evalExpr]
-    rw [Hk_ih] ; try omega
+    rw [Hk_ih] ; omega
   case G1 k Hk_ih =>
     -- simp [getMaxVar] at Hl
     -- simp [evalExpr]
-    rw [Hk_ih] ; try omega
+    rw [Hk_ih] ; omega
 
 lemma restrictAndExtend (l1 l2 : ℕ) (H : l1 <= l2) (f : Fin l2 -> S) (zero : S) :
   agreeOnPrefix l1 (extendFin zero f) (extendFin zero (restrict H f)) := by
