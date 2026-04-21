@@ -1,19 +1,17 @@
-import SymbolicGarbledCircuitsInLean.Expression.Defs
-import SymbolicGarbledCircuitsInLean.Expression.SymbolicIndistinguishability
--- import SymbolicGarbledCircuitsInLean.Expression.ComputationalSemantics.Def
--- import SymbolicGarbledCircuitsInLean.ComputationalIndistinguishability.Def
+import PRGExtension.Expression.Defs
+import PRGExtension.Expression.SymbolicIndistinguishability
 
-import SymbolicGarbledCircuitsInLean.Expression.ComputationalSemantics.NormalizePreserves
-import SymbolicGarbledCircuitsInLean.Expression.ComputationalSemantics.RenamePreserves
-import SymbolicGarbledCircuitsInLean.ComputationalIndistinguishability.Lemmas
-import SymbolicGarbledCircuitsInLean.Expression.ComputationalSemantics.SoundnessProof.HidingOneKey
+import PRGExtension.Expression.ComputationalSemantics.NormalizePreserves
+import PRGExtension.Expression.ComputationalSemantics.RenamePreserves
+import PRGExtension.ComputationalIndistinguishability.Lemmas
+import PRGExtension.Expression.ComputationalSemantics.SoundnessProof.HidingOneKey
 
-import SymbolicGarbledCircuitsInLean.Core.Fixpoints
+import PRGExtension.Core.Fixpoints
 import Mathlib.Probability.Distributions.Uniform
 
 import Mathlib.Data.Finset.SDiff
 
-
+open PRG
 
 noncomputable
 def hideSelectedFreshKeys {s : Shape} (keyToRemove : Finset (Expression Shape.KeyS)) (expr : Expression s) (_H : keyToRemove ∩ extractKeys expr = ∅) :=
