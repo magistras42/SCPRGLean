@@ -4,7 +4,7 @@ import PRGExtension.Expression.SymbolicIndistinguishability
 import PRGExtension.Expression.Lemmas.HideEncrypted
 import PRGExtension.ComputationalIndistinguishability.Lemmas
 import PRGExtension.Expression.ComputationalSemantics.EncryptionIndCpa
-import PRGExtension.Expression.ComputationalSemantics.PrgSecurity
+-- import PRGExtension.Expression.ComputationalSemantics.PrgSecurity
 
 namespace PRG
 

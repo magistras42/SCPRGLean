@@ -51,21 +51,10 @@ lemma twoHideEncryptedS {y z : Set (Expression Shape.KeyS)} (expr : Expression s
   induction expr <;> simp [hideEncryptedS, hideSelectedS, extractKeys, extractKeys] <;> try tauto
   case Enc s e1 e2 H1 H2 =>
     rw [apply_ite (hideEncryptedS ↑y)]
-    simp [hideEncryptedS]
-    simp [H1, H2]
-    split <;> try simp
-    next he1 =>
-      split <;> try simp
-      next he2 =>
-        rw [ite_cond_eq_true]
-        simp; constructor <;> assumption
-      next he2 =>
-        rw [ite_cond_eq_false]
-        simp; intro hcontra; exfalso
-        apply he2; assumption
-    next he1 =>
-      rw [ite_cond_eq_false]
-      simp; intro; apply he1
+    -- hideEncryptedS_K reduces all nested keys back to themselves.
+    -- H2 collapses the encrypted message.
+    simp [hideEncryptedS, hideEncryptedS_K, H2]
+    split_ifs <;> simp_all [hideEncryptedS_K]
 
 lemma twoHiding {y z : Finset (Expression Shape.KeyS)} (expr : Expression s):
   (y ⊆ z) ->
@@ -90,7 +79,6 @@ lemma expressionRecoveryNegEq {s : Shape} (keyToRemove : Finset (Expression Shap
     congr
     exact Eq.symm (Set.insert_eq_of_mem Hkey)
 
-
 def expressionRecovery {s : Shape} (p : Expression s) : Expression s :=
   let key := extractKeys p
   hideEncrypted key p
@@ -99,11 +87,11 @@ def expressionRecovery {s : Shape} (p : Expression s) : Expression s :=
 def symbolicToSemanticIndistinguishabilityHidingInnerMotive (z : Finset (Expression Shape.KeyS)) : Prop :=
   forall
    (IsPolyTime : PolyFamOracleCompPred) (_HPolyTime : PolyTimeClosedUnderComposition IsPolyTime)
-  (_Hreduction : forall enc shape (expr : Expression shape) key₀, IsPolyTime (reductionHidingOneKey enc expr key₀))
-  (enc : encryptionScheme) (_HEncIndCpa : encryptionSchemeIndCpa IsPolyTime enc)
+  (_Hreduction : forall enc prg shape (expr : Expression shape) (key₀ : ℕ), IsPolyTime (reductionHidingOneKey enc prg expr key₀))
+  (enc : encryptionScheme) (prg : prgScheme) (_HEncIndCpa : encryptionSchemeIndCpa IsPolyTime enc)
   {shape : Shape} (expr : Expression shape)
   (_HexprZ : ((extractKeys expr) ∩ z = ∅)),
-   CompIndistinguishabilityDistr IsPolyTime (famDistrLift (exprToFamDistr enc expr)) (famDistrLift (exprToFamDistr enc (hideSelectedS z expr)))
+   CompIndistinguishabilityDistr IsPolyTime (famDistrLift (exprToFamDistr enc prg expr)) (famDistrLift (exprToFamDistr enc prg (hideSelectedS z expr)))
 
 theorem symbolicToSemanticIndistinguishabilityHidingInner  (z : Finset (Expression Shape.KeyS)) : symbolicToSemanticIndistinguishabilityHidingInnerMotive z :=
 by
