@@ -14,6 +14,21 @@ import SymbolicGarbledCircuitsInLean.Expression.Lemmas.HideEncrypted
 import SymbolicGarbledCircuitsInLean.Expression.ComputationalSemantics.Def
 import SymbolicGarbledCircuitsInLean.Expression.ComputationalSemantics.Soundness
 import SymbolicGarbledCircuitsInLean.Expression.ComputationalSemantics.RenamePreserves
+/-
+import PRGExtension.Core.Fixpoints
+import PRGExtension.Core.CardinalityLemmas
+import PRGExtension.ComputationalIndistinguishability.Def
+import PRGExtension.ComputationalIndistinguishability.Lemmas
+import PRGExtension.Expression.Defs
+import PRGExtension.Expression.SymbolicIndistinguishability
+import PRGExtension.Expression.Renamings
+import PRGExtension.Expression.Lemmas.Renaming
+import PRGExtension.Expression.Lemmas.NormalizeIdempotent
+import PRGExtension.Expression.Lemmas.HideEncrypted
+import PRGExtension.Expression.ComputationalSemantics.Def
+import PRGExtension.Expression.ComputationalSemantics.Soundness
+import PRGExtension.Expression.ComputationalSemantics.RenamePreserves
+-/
 import SymbolicGarbledCircuitsInLean.Garbling.Circuits
 import SymbolicGarbledCircuitsInLean.Garbling.GarblingDef
 import SymbolicGarbledCircuitsInLean.Garbling.Simulate
