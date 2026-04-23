@@ -80,6 +80,9 @@ The proof of symbolic security depends on the results from  `SymbolicHiding/` su
 * `SimulateProof.lean` analogous to `GarbleProof.lean` and `GarbleHole.lean`, but for the simulated garbled circuit.
 * `GarbleHoleBitSwap.lean` constructs explicitly a variable renaming maps from the actual garbled circuit to the simulated one.
 
+## DEMO
+This artifact is essentially a library for computationally-sound, symmetric-key cryptography. Originally, I was going to show its utility by using it to formalize a PRG-based garbled circuit implementation, but I ran out of time. The `Soundness.lean` file represents the culmination of my formalization efforts.
+
 ## Bibliography
 
 [LM18]: Li, Baiyu, and Daniele Micciancio. "Symbolic security of garbled circuits." 2018 IEEE 31st Computer Security Foundations Symposium (CSF). IEEE, 2018.
