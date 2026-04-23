@@ -3,8 +3,8 @@ Copyright (c) 2024 Devon Tuma. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Devon Tuma
 -/
-import SymbolicGarbledCircuitsInLean.VCVio2.VCVio.OracleComp.OracleComp
-import SymbolicGarbledCircuitsInLean.VCVio2.ToMathlib.Control.StateT
+import VCVio2.VCVio.OracleComp.OracleComp
+import VCVio2.ToMathlib.Control.StateT
 
 /-!
 # Simulation Semantics for Oracles in a Computation

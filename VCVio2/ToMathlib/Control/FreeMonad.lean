@@ -5,7 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Devon Tuma, Quang Dao
 -/
 
-import SymbolicGarbledCircuitsInLean.VCVio2.ToMathlib.Control.MonadHom
+import VCVio2.ToMathlib.Control.MonadHom
 import Mathlib.Data.PFunctor.Univariate.Basic
 import Mathlib.Data.ENat.Lattice
 

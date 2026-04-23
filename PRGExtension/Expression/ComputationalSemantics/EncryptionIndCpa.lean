@@ -1,8 +1,8 @@
 import PRGExtension.Expression.ComputationalSemantics.Def
 import PRGExtension.ComputationalIndistinguishability.Def
-import SymbolicGarbledCircuitsInLean.VCVio2.VCVio.OracleComp.OracleSpec
-import SymbolicGarbledCircuitsInLean.VCVio2.VCVio.OracleComp.OracleComp
-import SymbolicGarbledCircuitsInLean.VCVio2.VCVio.OracleComp.SimSemantics.SimulateQ
+import VCVio2.VCVio.OracleComp.OracleSpec
+import VCVio2.VCVio.OracleComp.OracleComp
+import VCVio2.VCVio.OracleComp.SimSemantics.SimulateQ
 
 -- defines the notion of IND-CPA security for encryption schemes.
 namespace PRG

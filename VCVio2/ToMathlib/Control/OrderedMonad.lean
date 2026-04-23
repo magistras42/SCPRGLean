@@ -6,9 +6,9 @@ Authors: Quang Dao
 
 import Mathlib.Control.Monad.Cont
 import Mathlib.CategoryTheory.Monad.Basic
-import SymbolicGarbledCircuitsInLean.VCVio2.ToMathlib.Control.MonadAlgebra
-import SymbolicGarbledCircuitsInLean.VCVio2.ToMathlib.Control.MonadRelation
-import SymbolicGarbledCircuitsInLean.VCVio2.ToMathlib.Control.MonadTransformer
+import VCVio2.ToMathlib.Control.MonadAlgebra
+import VCVio2.ToMathlib.Control.MonadRelation
+import VCVio2.ToMathlib.Control.MonadTransformer
 import Mathlib.Order.Monotone.Basic
 
 /-!

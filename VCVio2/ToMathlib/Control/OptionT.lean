@@ -6,8 +6,8 @@ Authors: Devon Tuma
 -- import ToMathlib.Control.FreeMonad
 import Batteries.Control.AlternativeMonad
 import Batteries.Control.OptionT
-import SymbolicGarbledCircuitsInLean.VCVio2.ToMathlib.Control.MonadHom
-import SymbolicGarbledCircuitsInLean.VCVio2.ToMathlib.General
+import VCVio2.ToMathlib.Control.MonadHom
+import VCVio2.ToMathlib.General
 
 /-!
 # Lemmas about `OptionT`

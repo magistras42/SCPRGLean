@@ -3,12 +3,12 @@ Copyright (c) 2024 Devon Tuma. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Devon Tuma
 -/
-import SymbolicGarbledCircuitsInLean.VCVio2.ToMathlib.Control.FreeMonad
-import SymbolicGarbledCircuitsInLean.VCVio2.ToMathlib.Control.WriterT
-import SymbolicGarbledCircuitsInLean.VCVio2.ToMathlib.Control.AlternativeMonad
-import SymbolicGarbledCircuitsInLean.VCVio2.ToMathlib.Control.OptionT
+import VCVio2.ToMathlib.Control.FreeMonad
+import VCVio2.ToMathlib.Control.WriterT
+import VCVio2.ToMathlib.Control.AlternativeMonad
+import VCVio2.ToMathlib.Control.OptionT
 import Mathlib.Control.Lawful
-import SymbolicGarbledCircuitsInLean.VCVio2.VCVio.OracleComp.OracleSpec
+import VCVio2.VCVio.OracleComp.OracleSpec
 
 /-!
 # Computations with Oracle Access

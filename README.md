@@ -1,14 +1,14 @@
 # Symbolic Cryptography in Lean
 
-This project provides a **symbolic cryptography library in Lean**, together with a **formally verified computational soundness theorem** and a **formally verified symbolic proof of security for the garbled circuit scheme** (based on [LM18]).
+This project provides a **PRG-based symbolic cryptography library in Lean** (modeled on the original Lean framework and following the pen-and-paper formalization by [LM18]).
 
-This repository accompanies the paper:
+This repository is based on the paper:
 
 > *Computationally-Sound Symbolic Cryptography in Lean*  
 > S. Dziembowski, G. Fabiański, D. Micciancio, and R. Stefański  
 > (accepted to CSF 2026; a preprint available at [Cryptology ePrint Archive](https://eprint.iacr.org/2025/1700))
 
-We recommend reading the paper as it provides the high-level overview and the intuition behind the formalization.
+We recommend reading the project report and the paper it was based on as it provides the high-level overview and the intuition behind the formalization.
 
 ## Building the Project
 
@@ -23,15 +23,15 @@ Below is a brief description of the main files in this directory, along with the
 Our project depends on the VCVio library, introduced in [TH24], to define computations that can query an oracle. The `VCVio2` folder contains a fragment of this library, specifically the part that defines such computations. We had some troubles building the original library, so 
 we have modified the original code by removing parts that we did not need for our project, and making small fixes to make it compatible with our versions of Lean and Mathlib.
 
-### ComputationalIndistinguishability
+### PRGExtension/ComputationalIndistinguishability
 
 This folder defines computational indistinguishability and develops some basic properties.
 
-1. `Def.lean` defines computational indistinguishability between two oracles. It also defines indistinguishability between two families of distributions. These definitions rely on an abstract notion of complexity which captures all allowed adversarial behavior(called PolynomialTime, as commonly assumed in cryptography). For more details, see our paper.
+1. `Def.lean` defines computational indistinguishability between two oracles. It also defines indistinguishability between two families of distributions. These definitions rely on an abstract notion of complexity which captures all allowed adversarial behavior(called PolynomialTime, as commonly assumed in cryptography). For more details, see the original paper.
 2. `Lemmas.lean` proves basic properties of indistinguishability, such as transitivity and symmetry. It also includes the lemma
    `IndistinguishabilityByReduction`, which shows how to use reductions to prove indistinguishability.
 
-### Core
+### PRGExtension/Core
 
 This folder contains general mathematical results used in the project:
 
@@ -39,7 +39,7 @@ This folder contains general mathematical results used in the project:
    a lattice of finite sets.
 2. `CardinalityLemmas.lean` contains auxiliary lemmas about the cardinality of sets.
 
-### Expression
+### PRGExtension/Expression
 
 This module defines the expression language used in symbolic cryptography, based on [LM18]:
 
@@ -60,10 +60,10 @@ The `Expression/ComputationalSemantics` submodule contains the following files:
 3. `EncryptionIndCpa.lean` defines the notion of IND-CPA security for encryption schemes.
 4. `Soundness.lean` proves the soundness theorem: if two expressions are symbolically indistinguishable, then their computational semantics (distributions over bitstrings)  are computationally indistinguishable. The technical details of this proof are in `SoundnessProof`.
 
-### Symbolic Security of Garbled Circuits
+### (Omitted) Symbolic Security of Garbled Circuits
 
 This showcases the symbolic approach to cryptography by proving the security of a garbled circuit scheme (following the lines of [LM18]).
-Thanks to the soundness theorem, this boils down to proving symbolic indistinguishability.
+Thanks to the soundness theorem, this boils down to proving symbolic indistinguishability. See original framework.
 
 1. `Circuits.lean` – Defines circuits inductively. The main definitions are the `Circuit` type and the `evalCircuit` function.
 2. `GarblingDef.lean` – Defines the garbling scheme. The main definitions are:

@@ -1,6 +1,6 @@
-import SymbolicGarbledCircuitsInLean.VCVio2.VCVio.OracleComp.OracleSpec
-import SymbolicGarbledCircuitsInLean.VCVio2.VCVio.OracleComp.OracleComp
-import SymbolicGarbledCircuitsInLean.VCVio2.VCVio.OracleComp.SimSemantics.SimulateQ
+import VCVio2.VCVio.OracleComp.OracleSpec
+import VCVio2.VCVio.OracleComp.OracleComp
+import VCVio2.VCVio.OracleComp.SimSemantics.SimulateQ
 
 -- In this file, we want to define a notion of computational indistinguishability,
 -- for families of of distributions parameterized by the security parameter (κ : ℕ).

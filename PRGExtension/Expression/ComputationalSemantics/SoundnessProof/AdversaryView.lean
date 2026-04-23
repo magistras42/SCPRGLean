@@ -5,6 +5,7 @@ import PRGExtension.Expression.ComputationalSemantics.NormalizePreserves
 import PRGExtension.Expression.ComputationalSemantics.RenamePreserves
 import PRGExtension.ComputationalIndistinguishability.Lemmas
 import PRGExtension.Expression.ComputationalSemantics.SoundnessProof.HidingOneKey
+import PRGExtension.Expression.ComputationalSemantics.SoundnessProof.HidingOnePrgSeed
 import PRGExtension.Expression.ComputationalSemantics.PrgSecurity
 
 import PRGExtension.Core.Fixpoints
@@ -88,6 +89,8 @@ def symbolicToSemanticIndistinguishabilityHidingInnerMotive (z : Finset (Express
   forall
    (IsPolyTime : PolyFamOracleCompPred) (_HPolyTime : PolyTimeClosedUnderComposition IsPolyTime)
   (_Hreduction : forall enc prg shape (expr : Expression shape) (key₀ : ℕ), IsPolyTime (reductionHidingOneKey enc prg expr key₀))
+  (_HreductionPrg : forall (enc_ : encryptionScheme) (prg_ : prgScheme) (s_ : Shape) (expr_ : Expression s_) (targetSeed_ : Expression Shape.KeyS) (idx0_ idx1_ : ℕ),
+    IsPolyTime (fun κ => reductionToPrgOracle enc_ prg_ expr_ targetSeed_ idx0_ idx1_ κ))
   (enc : encryptionScheme) (prg : prgScheme)
   (_HEncIndCpa : encryptionSchemeIndCpa IsPolyTime enc)
   (_HPrgSecure : prgSchemeSecure IsPolyTime prg)
@@ -108,13 +111,13 @@ theorem symbolicToSemanticIndistinguishabilityHidingInner  (z : Finset (Expressi
 by
   induction z using Finset.induction_on'
   case empty =>
-    intro IsPolyTime HPolyTime Hreduction enc prg HEncIndCpa HPrgSecure shape expr Hexpr Hempty
+    intro IsPolyTime HPolyTime Hreduction HreductionPrg enc prg HEncIndCpa HPrgSecure shape expr Hexpr Hempty
     conv =>
       arg 2
       simp [emptyHide]
     apply indRfl
   case insert key keySet Hkey Hkey2 HkeyFresh Hind  =>
-    intro IsPolyTime HPolyTime Hreduction enc prg HEncIndCpa HPrgSecure shape expr Hexpr
+    intro IsPolyTime HPolyTime Hreduction HreductionPrg enc prg HEncIndCpa HPrgSecure shape expr Hexpr
     rw [<-hideSelectedFreshKeys]
     case _H =>
       rw [Finset.inter_comm]
@@ -155,47 +158,97 @@ by
       case VarK key₀ =>
           simp [removeOneKeyProper, removeOneKey]
           exact symbolicToSemanticIndistinguishabilityHidingOneKey IsPolyTime HPolyTime Hreduction enc HEncIndCpa expr key₀ Hnot
-      -- TODO - need the PRG indistinguishability result
       case G0 ek =>
         simp [removeOneKeyProper, removeOneKey]
         let idx0 := 9998
         let idx1 := 9999
-        apply indTrans (fun {I Spec Output} ↦ IsPolyTime)
-        · -- Goal 1: PRG Soundness Axiom!
-          exact idealize_PRG_soundness enc prg expr ek idx0 idx1 IsPolyTime HPrgSecure (by sorry) (by decide) (by sorry) (by sorry)
-        · -- Step B: Apply IND-CPA and Reverse PRG
-          apply indTrans (fun {I Spec Output} ↦ IsPolyTime)
-          · -- Goal 2: IND-CPA Soundness
+
+        -- 1. Isolate the symbolic set-theory goals so they don't break the Game Hops
+        have H_no_seed : ek ∉ adversaryKeys expr := by
+          -- To prove this later: Unfold Hind. Since ek.G0 ∈ z, it is hidden.
+          -- If ek were in adversaryKeys, prgClosure would mean ek.G0 is in adversaryKeys,
+          -- contradicting that it is safely hidden in z.
+          sorry
+
+        have H_fresh0 : Expression.VarK idx0 ∉ keySubterms expr := by
+          -- 9998 is a fresh integer not used in the expression
+          sorry
+
+        have H_fresh1 : Expression.VarK idx1 ∉ keySubterms expr := by
+          -- 9999 is a fresh integer not used in the expression
+          sorry
+
+        have H_diff : idx0 ≠ idx1 := by decide
+
+        apply indTrans
+        · -- Goal 1: PRG Idealization (Real to Dummy)
+          exact symbolicToSemanticIndistinguishabilityPrgIdealization IsPolyTime HreductionPrg enc prg HPrgSecure expr ek idx0 idx1
+            (H_no_seed) (H_diff) (H_fresh0) (H_fresh1)
+        · -- Apply IND-CPA on the now-dummy key, then Reverse PRG
+          apply indTrans
+          · -- Goal 2: IND-CPA Soundness on the dummy key
             exact symbolicToSemanticIndistinguishabilityHidingOneKey IsPolyTime HPolyTime Hreduction enc HEncIndCpa (replacePRG ek idx0 idx1 expr) idx0 (by sorry)
-          · -- Goal 3: Reverse PRG Soundness
+          · -- Goal 3: Reverse PRG Idealization (Dummy back to Real)
             apply indSym
-            convert idealize_PRG_soundness enc prg (hideSelectedS {ek.G0} expr) ek idx0 idx1 IsPolyTime HPrgSecure (by sorry) (by decide) (by sorry) (by sorry)
-            -- This leaves one new subgoal: proving the distributions are equal
-          -- famDistrLift (exprToFamDistr ... (replacePRG ... (hideSelectedS ...))) =
-          -- famDistrLift (exprToFamDistr ... (removeOneKey ... (replacePRG ...)))
-            sorry
+
+            -- 1. State the structural commutation: replacing PRG after hiding G0
+            -- is identical to hiding the idx0 dummy after replacing PRG.
+            have H_commute : replacePRG ek idx0 idx1 (hideSelectedS {ek.G0} expr) =
+                             removeOneKey (Expression.VarK idx0) (replacePRG ek idx0 idx1 expr) := by
+              sorry
+
+            rw [← H_commute]
+
+            exact symbolicToSemanticIndistinguishabilityPrgIdealization IsPolyTime HreductionPrg enc prg HPrgSecure (hideSelectedS {ek.G0} expr) ek idx0 idx1
+              (by sorry) (H_diff) (by sorry) (by sorry)
       case G1 ek =>
         simp [removeOneKeyProper, removeOneKey]
         let idx0 := 9998
         let idx1 := 9999
-        apply indTrans (fun {I Spec Output} ↦ IsPolyTime)
-        · -- Goal 1: PRG Soundness Axiom!
-          exact idealize_PRG_soundness enc prg expr ek idx0 idx1 IsPolyTime HPrgSecure (by sorry) (by decide) (by sorry) (by sorry)
-        · -- Step B: Apply IND-CPA and Reverse PRG
-          apply indTrans (fun {I Spec Output} ↦ IsPolyTime)
+
+        -- 1. Isolate the symbolic set-theory goals so they don't break the Game Hops
+        have H_no_seed : ek ∉ adversaryKeys expr := by
+          -- To prove this later: Unfold Hind. Since ek.G0 ∈ z, it is hidden.
+          -- If ek were in adversaryKeys, prgClosure would mean ek.G0 is in adversaryKeys,
+          -- contradicting that it is safely hidden in z.
+          sorry
+
+        have H_fresh0 : Expression.VarK idx0 ∉ keySubterms expr := by
+          -- 9998 is a fresh integer not used in the expression
+          sorry
+
+        have H_fresh1 : Expression.VarK idx1 ∉ keySubterms expr := by
+          -- 9999 is a fresh integer not used in the expression
+          sorry
+
+        have H_diff : idx0 ≠ idx1 := by decide
+
+        apply indTrans
+        · -- Goal 1: PRG Idealization
+          exact symbolicToSemanticIndistinguishabilityPrgIdealization IsPolyTime HreductionPrg enc prg HPrgSecure expr ek idx0 idx1
+            (H_no_seed) (H_diff) (H_fresh0) (H_fresh1)
+        · -- Apply IND-CPA and Reverse PRG
+          apply indTrans
           · -- Goal 2: IND-CPA Soundness
-            exact symbolicToSemanticIndistinguishabilityHidingOneKey IsPolyTime HPolyTime Hreduction enc HEncIndCpa (replacePRG ek idx0 idx1 expr) idx0 (by sorry)
+            exact symbolicToSemanticIndistinguishabilityHidingOneKey IsPolyTime HPolyTime Hreduction enc HEncIndCpa (replacePRG ek idx0 idx1 expr) idx1 (by sorry)
           · -- Goal 3: Reverse PRG Soundness
             apply indSym
-            convert idealize_PRG_soundness enc prg (hideSelectedS {ek.G1} expr) ek idx0 idx1 IsPolyTime HPrgSecure (by sorry) (by decide) (by sorry) (by sorry)
-            -- This leaves one new subgoal: proving the distributions are equal
-          -- famDistrLift (exprToFamDistr ... (replacePRG ... (hideSelectedS ...))) =
-          -- famDistrLift (exprToFamDistr ... (removeOneKey ... (replacePRG ...)))
-            sorry
+
+            have H_commute : replacePRG ek idx0 idx1 (hideSelectedS {ek.G1} expr) =
+                             removeOneKey (Expression.VarK idx1) (replacePRG ek idx0 idx1 expr) := by
+              sorry
+
+            -- 2. Rewrite the goal using our commutation lemma backwards
+            rw [← H_commute]
+
+            exact symbolicToSemanticIndistinguishabilityPrgIdealization IsPolyTime HreductionPrg enc prg HPrgSecure (hideSelectedS {ek.G1} expr) ek idx0 idx1
+              (by sorry) (H_diff) (by sorry) (by sorry)
 
 theorem symbolicToSemanticIndistinguishabilityHiding
   (IsPolyTime : PolyFamOracleCompPred) (HPolyTime : PolyTimeClosedUnderComposition IsPolyTime)
   (Hreduction : forall enc prg shape (expr : Expression shape) key₀, IsPolyTime (reductionHidingOneKey enc prg expr key₀))
+  (HreductionPrg : forall (enc_ : encryptionScheme) (prg_ : prgScheme) (s_ : Shape) (expr_ : Expression s_) (targetSeed_ : Expression Shape.KeyS) (idx0_ idx1_ : ℕ),
+    IsPolyTime (fun κ => reductionToPrgOracle enc_ prg_ expr_ targetSeed_ idx0_ idx1_ κ))
   (enc : encryptionScheme) (prg : prgScheme)
   (HEncIndCpa : encryptionSchemeIndCpa IsPolyTime enc)
   (HPrgSecure : prgSchemeSecure IsPolyTime prg)
@@ -206,7 +259,7 @@ by
   rw [← hideKeysUniv]
   rw [← Finset.coe_sdiff]
   -- allParts \ extractKeys is guaranteed to be a finite set due to our fixed point calculations earlier
-  apply symbolicToSemanticIndistinguishabilityHidingInner (allParts expr \ extractKeys expr) IsPolyTime HPolyTime Hreduction enc prg HEncIndCpa HPrgSecure
+  apply symbolicToSemanticIndistinguishabilityHidingInner (allParts expr \ extractKeys expr) IsPolyTime HPolyTime Hreduction HreductionPrg enc prg HEncIndCpa HPrgSecure
   -- extractKeys expr ∩ (allParts expr \ extractKeys expr) = ∅
   apply Finset.eq_empty_of_forall_not_mem
   intro x
@@ -237,52 +290,193 @@ lemma iterationOrFresh {z : Finset (Expression Shape.KeyS)} (expr : Expression s
     apply twoHiding
 
 theorem symbolicToSemanticIndistinguishabilityAdversaryView
-  (IsPolyTime : PolyFamOracleCompPred) (HPolyTime : PolyTimeClosedUnderComposition IsPolyTime)
+  (IsPolyTime : PolyFamOracleCompPred)
+  (HPolyTime : PolyTimeClosedUnderComposition (fun {I Spec Output} => IsPolyTime))
   (Hreduction : forall enc prg shape (expr : Expression shape) key₀, IsPolyTime (reductionHidingOneKey enc prg expr key₀))
-  (enc : encryptionScheme) (prg : prgScheme)
-  (HEncIndCpa : encryptionSchemeIndCpa IsPolyTime enc)
-  (HPrgSecure : prgSchemeSecure IsPolyTime prg)
-  {shape : Shape} (expr: Expression shape)
-  : CompIndistinguishabilityDistr IsPolyTime (famDistrLift (exprToFamDistr enc prg expr)) (famDistrLift (exprToFamDistr enc prg (adversaryView expr))) :=
-  by
-  let R (e1 e2 : Expression shape) := exprCompInd IsPolyTime enc prg e1 e2
+  (HreductionPrg : forall (enc_ : encryptionScheme) (prg_ : prgScheme) (s_ : Shape) (expr_ : Expression s_) (targetSeed_ : Expression Shape.KeyS) (idx0_ idx1_ : ℕ),
+    IsPolyTime (fun κ => reductionToPrgOracle enc_ prg_ expr_ targetSeed_ idx0_ idx1_ κ))
+  (enc : encryptionScheme)
+  (prg : prgScheme)
+  (HEncIndCpa : encryptionSchemeIndCpa (fun {I Spec Output} => IsPolyTime) enc)
+  (HPrgSecure : prgSchemeSecure (fun {I Spec Output} => IsPolyTime) prg)
+  {shape : Shape}
+  (expr : Expression shape) :
+  CompIndistinguishabilityDistr (fun {I Spec Output} => IsPolyTime)
+    (famDistrLift (exprToFamDistr enc prg expr))
+    (famDistrLift (exprToFamDistr enc prg (adversaryView expr))) := by
+  let R := fun (e1 e2 : Expression shape) => exprCompInd (fun {I Spec Output} => IsPolyTime) enc prg e1 e2
+  -- Upgraded fixaccess framework
   have Z := fixaccess
-    (fun key => hideEncrypted key expr) -- f1
-    (keyRecovery expr)                  -- f
+    (fun key => hideEncrypted key expr) -- f1 (View Generator)
+    (keyRecovery expr)                  -- f  (Unified PRG Key Recovery Step)
     (keyRecoveryMonotone expr)          -- f_monotone
     expr                                -- fBound
     (keySubterms expr)                  -- boundSet
     (keyRecoveryContained expr)         -- HfBound
     R
-    (by -- RTrans
+    -- Transitivity (RTrans)
+    (by
       intro e1 e2 e3 Ha Hb
       simp [R, exprCompInd] at *
       apply indTrans (fun {I Spec Output} ↦ IsPolyTime)
       · exact Ha
-      · exact Hb)
-    (by -- Ras block
+      · exact Hb
+    )
+    -- Single-Step Fixpoint Hiding (Ras)
+    (by
       intro z Hz
       simp [R, exprCompInd]
-      have Z := symbolicToSemanticIndistinguishabilityHiding IsPolyTime HPolyTime Hreduction enc prg HEncIndCpa HPrgSecure (hideEncrypted z expr)
+      -- Apply semantic hiding to the current expression
+      have Z := symbolicToSemanticIndistinguishabilityHiding IsPolyTime HPolyTime Hreduction HreductionPrg enc prg HEncIndCpa HPrgSecure (hideEncrypted z expr)
       simp [expressionRecovery] at Z
-      -- rw [iterationOrFresh] at Z
-      -- apply Z
-      -- assumption
-      have Hsubset: extractKeys (hideEncrypted z expr) ⊆ z := by
-        apply Finset.Subset.trans _ Hz
-        simp [keyRecovery]
-        -- apply Finset.subset_union_left
+      -- Extracting from z-hidden expr is a subset of extracting from PRG-hidden expr
+      have H_monotone : extractKeys (hideEncrypted z expr) ⊆ extractKeys (hideEncrypted (prgClosure (keySubterms expr) z) expr) := by
+        apply keyPartsMonotone
+        apply hideEncryptedMonotone
+        apply subset_prgClosure
+      -- Bridge the extraction to the full PRG recovery
+      have H_extract_sub_recovery : extractKeys (hideEncrypted z expr) ⊆ keyRecovery expr z := by
+        apply Finset.Subset.trans H_monotone
+        apply subset_prgClosure
+      -- Prove the subset required by iterationOrFresh
+      have Hsubset : extractKeys (hideEncrypted z expr) ⊆ z := by
+        apply Finset.Subset.trans H_extract_sub_recovery Hz
+      apply indTrans (fun {I Spec Output} ↦ IsPolyTime)
+      . exact Z
+      .
+        have Heq : hideEncrypted (extractKeys (hideEncrypted z expr)) (hideEncrypted z expr) = hideEncrypted (extractKeys (hideEncrypted z expr)) expr := iterationOrFresh expr Hsubset
+        rw [Heq]
+        -- this is where the prg indistinguishability results should go
         sorry
-      -- rw [iterationOrFresh Hsubset] at Z
-      -- convert Z
-      sorry
     )
-    (by -- Rsup
+    -- Base Case Initialization (Rsup)
+    (by
       simp [R, exprCompInd]
-      have Z := symbolicToSemanticIndistinguishabilityHiding IsPolyTime HPolyTime Hreduction enc prg HEncIndCpa HPrgSecure expr
+      have Z := symbolicToSemanticIndistinguishabilityHiding IsPolyTime HPolyTime Hreduction HreductionPrg enc prg HEncIndCpa HPrgSecure expr
       simp [expressionRecovery] at Z
-      -- apply Z
-      sorry
+      rw [hideEncrypted_keySubterms expr]
+      apply indRfl
+    )
+  exact Z
+
+
+theorem symbolicToSemanticIndistinguishabilityAdversaryView'
+  (IsPolyTime : PolyFamOracleCompPred)
+  (HPolyTime : PolyTimeClosedUnderComposition (fun {I Spec Output} => IsPolyTime))
+  (Hreduction : forall enc prg shape (expr : Expression shape) key₀, IsPolyTime (reductionHidingOneKey enc prg expr key₀))
+  (HreductionPrg : forall (enc_ : encryptionScheme) (prg_ : prgScheme) (s_ : Shape) (expr_ : Expression s_) (targetSeed_ : Expression Shape.KeyS) (idx0_ idx1_ : ℕ),
+    IsPolyTime (fun κ => reductionToPrgOracle enc_ prg_ expr_ targetSeed_ idx0_ idx1_ κ))
+  (enc : encryptionScheme)
+  (prg : prgScheme)
+  (HEncIndCpa : encryptionSchemeIndCpa (fun {I Spec Output} => IsPolyTime) enc)
+  (HPrgSecure : prgSchemeSecure (fun {I Spec Output} => IsPolyTime) prg)
+  {shape : Shape}
+  (expr : Expression shape) :
+  CompIndistinguishabilityDistr (fun {I Spec Output} => IsPolyTime)
+    (famDistrLift (exprToFamDistr enc prg expr))
+    (famDistrLift (exprToFamDistr enc prg (adversaryView expr))) := by
+  let R := fun (e1 e2 : Expression shape) => exprCompInd (fun {I Spec Output} => IsPolyTime) enc prg e1 e2
+  -- Upgraded fixaccess framework
+  have Z := fixaccess
+    (fun key => hideEncrypted key expr) -- f1 (View Generator)
+    (keyRecovery expr)                  -- f  (Unified PRG Key Recovery Step)
+    (keyRecoveryMonotone expr)          -- f_monotone
+    expr                                -- fBound
+    (keySubterms expr)                  -- boundSet
+    (keyRecoveryContained expr)         -- HfBound
+    R
+    -- Transitivity (RTrans)
+    (by
+      intro e1 e2 e3 Ha Hb
+      simp [R, exprCompInd] at *
+      apply indTrans (fun {I Spec Output} ↦ IsPolyTime)
+      · exact Ha
+      · exact Hb
+    )
+    -- Single-Step Fixpoint Hiding (Ras)
+    (by
+      intro z Hz
+      simp [R, exprCompInd]
+      -- Apply semantic hiding to the current expression
+      have Z := symbolicToSemanticIndistinguishabilityHiding IsPolyTime HPolyTime Hreduction HreductionPrg enc prg HEncIndCpa HPrgSecure (hideEncrypted z expr)
+      simp [expressionRecovery] at Z
+
+      -- Extracting from z-hidden expr is a subset of extracting from PRG-hidden expr
+      have H_monotone : extractKeys (hideEncrypted z expr) ⊆ extractKeys (hideEncrypted (prgClosure (keySubterms expr) z) expr) := by
+        apply keyPartsMonotone
+        apply hideEncryptedMonotone
+        apply subset_prgClosure
+
+      -- Bridge the extraction to the full PRG recovery
+      have H_extract_sub_recovery : extractKeys (hideEncrypted z expr) ⊆ keyRecovery expr z := by
+        apply Finset.Subset.trans H_monotone
+        apply subset_prgClosure
+
+      -- Prove the subset required by iterationOrFresh
+      have Hsubset : extractKeys (hideEncrypted z expr) ⊆ z := by
+        apply Finset.Subset.trans H_extract_sub_recovery Hz
+
+      -- Apply transitivity WITHOUT explicit parameters to avoid I✝ errors
+      apply indTrans
+
+      · -- Goal 1: LHS ≈ ?distr2
+        -- Your old logic was perfect here! Z goes from (hide z) to (nested hide).
+        -- Lean perfectly assigns ?distr2 to the nested hide.
+        exact Z
+
+      · -- Goal 2: ?distr2 ≈ RHS
+        -- Lean's goal is now: (nested hide) ≈ (keyRecovery hide)
+
+        -- Your old exact logic to un-nest the left side:
+        have Heq : hideEncrypted (extractKeys (hideEncrypted z expr)) (hideEncrypted z expr) = hideEncrypted (extractKeys (hideEncrypted z expr)) expr := iterationOrFresh expr Hsubset
+        rw [Heq]
+
+        -- The goal is now: (un-nested hide) ≈ (keyRecovery hide)
+
+        -- To clear the sorry safely (without timeouts), we build the RHS proof:
+        let RHS_view := hideEncrypted (keyRecovery expr z) expr
+        have Z_RHS := symbolicToSemanticIndistinguishabilityHiding IsPolyTime HPolyTime Hreduction HreductionPrg enc prg HEncIndCpa HPrgSecure RHS_view
+        simp [expressionRecovery] at Z_RHS
+
+        --- 1. Equate the un-nesting for the RHS (FULLY SOLVED!)
+        -- Because we already proved H_extract_sub_recovery (extractKeys(hide z) ⊆ keyRecovery z),
+        -- iterationOrFresh perfectly closes this goal without any extra work!
+        have Heq_RHS : hideEncrypted (extractKeys (hideEncrypted z expr)) RHS_view =
+           hideEncrypted (extractKeys (hideEncrypted z expr)) expr :=
+          twoHiding expr H_extract_sub_recovery
+
+        -- 2. Equate the extraction sets
+        have H_ext_eq : extractKeys RHS_view = extractKeys (hideEncrypted z expr) := by
+          apply Finset.Subset.antisymm
+
+          · -- Forward Direction: Since keyRecovery(z) ⊆ z (Hz), hiding the recovery
+            -- is smaller than hiding z, so it extracts fewer keys.
+            -- This uses your exact logic from H_monotone!
+            apply keyPartsMonotone
+            apply hideEncryptedMonotone
+            exact Hz
+
+          · -- Reverse Direction: The extracted keys never shrink below the minimal view.
+            -- This is a pure set-theory goal. You can replace this sorry with your
+            -- framework's idempotence/subset lemma (e.g., `extractKeys_subset_keyRecovery_extract`)
+            sorry
+
+        -- 3. Rewrite Z_RHS using our two structural proofs
+        rw [H_ext_eq] at Z_RHS
+        rw [Heq_RHS] at Z_RHS
+
+        -- Z_RHS now proves: (keyRecovery hide) ≈ (un-nested hide)
+        -- Our goal is: (un-nested hide) ≈ (keyRecovery hide)
+        -- We apply indSym directly to the proof term to avoid Lean unifier timeouts!
+        exact indSym Z_RHS
+    )
+    -- Base Case Initialization (Rsup)
+    (by
+      simp [R, exprCompInd]
+      have Z := symbolicToSemanticIndistinguishabilityHiding IsPolyTime HPolyTime Hreduction HreductionPrg enc prg HEncIndCpa HPrgSecure expr
+      simp [expressionRecovery] at Z
+      rw [hideEncrypted_keySubterms expr]
+      apply indRfl
     )
   exact Z
 

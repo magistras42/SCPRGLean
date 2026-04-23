@@ -3,8 +3,8 @@ Copyright (c) 2024 Devon Tuma. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Devon Tuma
 -/
-import SymbolicGarbledCircuitsInLean.VCVio2.ToMathlib.Control.FreeMonad
-import SymbolicGarbledCircuitsInLean.VCVio2.ToMathlib.General
+import VCVio2.ToMathlib.Control.FreeMonad
+import VCVio2.ToMathlib.General
 import Batteries.Control.Lemmas
 
 /-!

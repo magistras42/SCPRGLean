@@ -239,6 +239,69 @@ def KeySetInclusion {s : Shape} (K1 K2 : Finset (Expression s)) : Prop :=
 
 -- Next we introduce a block of lemmas about `ExpressionInclusion`, `hideEncrypted`, and `extractKeys`.
 
+-- Lemmas about prgClosure
+-- 1. A single PRG step always contains the initial keys
+lemma prgStep_extensive (univKeys S : Finset (Expression Shape.KeyS)) :
+  S ⊆ prgStep univKeys S := by
+  -- prgStep is defined as `S ∪ ...`, so the left side is trivially included
+  simp [prgStep]
+
+-- 2. Applying the step multiple times over any list maintains the subset
+lemma foldl_prgStep_extensive (univKeys S : Finset (Expression Shape.KeyS)) (l : List ℕ) :
+  S ⊆ l.foldl (fun currentS _ => prgStep univKeys currentS) S := by
+  -- We prove this by induction on the length of the list!
+  induction l generalizing S with
+  | nil =>
+    simp only [List.foldl_nil]
+    -- Base case: S ⊆ S
+    intro x hx
+    exact hx
+  | cons hd tl ih =>
+    simp only [List.foldl_cons]
+    -- Inductive case: S ⊆ foldl ... (prgStep univKeys S) tl
+    have H_step := prgStep_extensive univKeys S
+    have H_fold := ih (prgStep univKeys S)
+    exact Finset.Subset.trans H_step H_fold
+
+-- 3. The final extensivity lemma for the full closure!
+lemma subset_prgClosure (univKeys S : Finset (Expression Shape.KeyS)) :
+  S ⊆ prgClosure univKeys S := by
+  -- Simply unfold the closure definition and apply our list helper
+  unfold prgClosure
+  apply foldl_prgStep_extensive
+
+lemma key_in_keySubterms (k : Expression Shape.KeyS) : k ∈ keySubterms k := by
+  cases k <;> simp [keySubterms]
+
+lemma hideEncrypted_superset_keySubterms {s : Shape} (keys : Finset (Expression Shape.KeyS)) (p : Expression s) (h : keySubterms p ⊆ keys) : hideEncrypted keys p = p := by
+  induction p <;> try simp [hideEncrypted]
+  case Pair e1 e2 ih1 ih2 =>
+    have h1 : keySubterms e1 ⊆ keys := fun x hx => h (by simp [keySubterms, hx])
+    have h2 : keySubterms e2 ⊆ keys := fun x hx => h (by simp [keySubterms, hx])
+    exact ⟨ih1 h1, ih2 h2⟩
+  case Perm b e1 e2 _ ih1 ih2 =>
+    have h1 : keySubterms e1 ⊆ keys := fun x hx => h (by simp [keySubterms, hx])
+    have h2 : keySubterms e2 ⊆ keys := fun x hx => h (by simp [keySubterms, hx])
+    exact ⟨ih1 h1, ih2 h2⟩
+  case Enc k e ih_k ih_e =>
+    have hk : k ∈ keys := h (by simp [keySubterms, key_in_keySubterms])
+    have h_k : keySubterms k ⊆ keys := fun x hx => h (by simp [keySubterms, hx])
+    have h_e : keySubterms e ⊆ keys := fun x hx => h (by simp [keySubterms, hx])
+    simp [hk]
+    exact ⟨ih_k h_k, ih_e h_e⟩
+  case G0 e ih =>
+    have h_e : keySubterms e ⊆ keys := fun x hx => h (by simp [keySubterms, hx])
+    exact ih h_e
+  case G1 e ih =>
+    have h_e : keySubterms e ⊆ keys := fun x hx => h (by simp [keySubterms, hx])
+    exact ih h_e
+  case Hidden k ih =>
+    have h_k : keySubterms k ⊆ keys := fun x hx => h (by simp [keySubterms, hx])
+    exact ih h_k
+
+lemma hideEncrypted_keySubterms {s : Shape} (p : Expression s) : hideEncrypted (keySubterms p) p = p :=
+  hideEncrypted_superset_keySubterms (keySubterms p) p (Finset.Subset.refl _)
+
 lemma ExpressionInclusionRfl (p : Expression s) : ExpressionInclusion p p :=
  by induction p <;>  simp [ExpressionInclusion] <;> try tauto
 

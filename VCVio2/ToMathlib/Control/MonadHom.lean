@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Devon Tuma
 -/
 import Mathlib.Probability.ProbabilityMassFunction.Monad
-import SymbolicGarbledCircuitsInLean.VCVio2.ToMathlib.Control.MonadAlgebra
+import VCVio2.ToMathlib.Control.MonadAlgebra
 import Batteries.Control.Lawful.MonadLift
 
 /-!

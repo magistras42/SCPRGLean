@@ -8,56 +8,76 @@ import PRGExtension.Expression.ComputationalSemantics.PrgSecurity
 
 namespace PRG
 
-/-
-Part 1: Theorems for reductionHidingOnePrgSeed.lean
-
-To replace the idealize_PRG_soundness axiom from PrgSecurity.lean, you need to build a reduction
-that acts as the adversary against the PRG oracle.
-
-1. The Reduction Function
-You need a function that queries the PRG oracle exactly once to get a pair
-of strings (val0, val1). Then, it traverses the expression. Whenever it sees G0 targetSeed,
-it substitutes val0. When it sees G1 targetSeed, it substitutes val1.
-
-2. The Real World Equivalence
-You must prove that if your reduction interacts with the Real PRG oracle (which outputs prg0(seed),
-prg1(seed)), the resulting distribution perfectly matches standard evaluation of the original expression.
-
-3. The Ideal World Equivalence
-You must prove that if your reduction interacts with the Ideal PRG oracle (which outputs two
-completely independent, truly random strings), the resulting distribution perfectly matches
-the evaluation of replacePRG (which uses fresh VarK idx0 and VarK idx1).
-
-4. The PRG Idealization Theorem
-Combine the two lemmas above with IndistinguishabilityByReduction (just like you did for IND-CPA)
-to prove the final PRG hop. This replaces the axiom.
+/--
+  The Reduction:
+  We query the provided PRG oracle (which is either Real or Ideal).
+  It gives us two strings (val0, val1). We then evaluate the modified expression
+  (where G0/G1 are replaced by VarK idx0/idx1), binding those variables to val0 and val1.
 -/
-
+noncomputable
 def reductionToPrgOracle (enc : encryptionScheme) (prg : prgScheme)
-  {s : Shape} (expr : Expression s) (targetSeed : Expression Shape.KeyS) :
-  OracleComp (oracleSpecPrg κ) (BitVector ...)
+  {s : Shape} (expr : Expression s) (targetSeed : Expression Shape.KeyS) (idx0 idx1 : ℕ)
+  (κ : ℕ) : OracleComp (withRandom (oracleSpecPrg κ)) (BitVector (shapeLength κ (enc κ) s)) := do
+
+  -- FIX 1 & 2: We use `withRandom` and pass `Sum.inr ()` to route the query to the PRG oracle!
+  let (val0, val1) ← (withRandom (oracleSpecPrg κ)).query (Sum.inr ()) ()
+
+  -- 3. Evaluate the replaced expression, forcing idx0 to val0 and idx1 to val1 in the environment.
+  sorry
 
 
-lemma reductionToPrgOracleRealEq :
-  OracleComp.simulateQ (prgRealOracleImpl κ prg targetSeed) (reductionToPrgOracle enc prg expr targetSeed) =
-  liftM (exprToFamDistr enc prg expr) := by sorry
+/--
+  Real World Equivalence:
+  If the oracle is the REAL PRG oracle (computing prg0(seed) and prg1(seed)),
+  our reduction perfectly perfectly simulates the evaluation of the original expression.
+-/
+lemma reductionToPrgOracleRealEq (enc : encryptionScheme) (prg : prgScheme)
+  {s : Shape} (expr : Expression s) (targetSeed : Expression Shape.KeyS) (idx0 idx1 : ℕ) :
+  compToDistrGen (seededPrgRealOracle prg) (fun κ => reductionToPrgOracle enc prg expr targetSeed idx0 idx1 κ) =
+  famDistrLift (exprToFamDistr enc prg expr) := by
+  sorry
 
+/--
+  Ideal World Equivalence:
+  If the oracle is the IDEAL PRG oracle (returning truly random strings),
+  our reduction perfectly perfectly simulates the evaluation of `replacePRG` with fresh indices.
+-/
+lemma reductionToPrgOracleIdealEq (enc : encryptionScheme) (prg : prgScheme)
+  {s : Shape} (expr : Expression s) (targetSeed : Expression Shape.KeyS) (idx0 idx1 : ℕ)
+  (H_diff : idx0 ≠ idx1)
+  (H_fresh0 : Expression.VarK idx0 ∉ keySubterms expr)
+  (H_fresh1 : Expression.VarK idx1 ∉ keySubterms expr) :
+  compToDistrGen seededPrgIdealOracle (fun κ => reductionToPrgOracle enc prg expr targetSeed idx0 idx1 κ) =
+  famDistrLift (exprToFamDistr enc prg (replacePRG targetSeed idx0 idx1 expr)) := by
+  sorry
 
-lemma reductionToPrgOracleIdealEq (idx0 idx1 : ℕ) (H_diff : idx0 ≠ idx1) (H_fresh0 : ...) (H_fresh1 : ...) :
-  OracleComp.simulateQ (prgIdealOracleImpl κ) (reductionToPrgOracle enc prg expr targetSeed) =
-  liftM (exprToFamDistr enc prg (replacePRG targetSeed idx0 idx1 expr)) := by sorry
-
+/--
+  The Core PRG Idealization Theorem.
+  Replaces `idealize_PRG_soundness` axiom using standard computational indistinguishability hops.
+-/
 theorem symbolicToSemanticIndistinguishabilityPrgIdealization
   (IsPolyTime : PolyFamOracleCompPred)
-  (Hreduction : forall enc prg shape expr targetSeed, IsPolyTime (reductionToPrgOracle enc prg expr targetSeed))
-  (enc : encryptionScheme) (prg : prgScheme) (HPrgSecure : prgSchemeSecure IsPolyTime prg)
+  -- FIX: Provide strict, explicit types for every binder inside Hreduction!
+  (Hreduction : ∀ (enc_ : encryptionScheme) (prg_ : prgScheme) (s_ : Shape)
+    (expr_ : Expression s_) (targetSeed_ : Expression Shape.KeyS) (idx0_ idx1_ : ℕ),
+    IsPolyTime (fun κ => reductionToPrgOracle enc_ prg_ expr_ targetSeed_ idx0_ idx1_ κ))
+  (enc : encryptionScheme)
+  (prg : prgScheme)
+  (HPrgSecure : prgSchemeSecure (fun {I Spec Output} => IsPolyTime) prg)
   {shape : Shape} (expr : Expression shape) (targetSeed : Expression Shape.KeyS) (idx0 idx1 : ℕ)
   (H_no_seed : targetSeed ∉ adversaryKeys expr)
   (H_diff : idx0 ≠ idx1)
   (H_fresh0 : Expression.VarK idx0 ∉ keySubterms expr)
   (H_fresh1 : Expression.VarK idx1 ∉ keySubterms expr) :
-  CompIndistinguishabilityDistr IsPolyTime
+  CompIndistinguishabilityDistr (fun {I Spec Output} => IsPolyTime)
     (famDistrLift (exprToFamDistr enc prg expr))
-    (famDistrLift (exprToFamDistr enc prg (replacePRG targetSeed idx0 idx1 expr))) := by sorry
+    (famDistrLift (exprToFamDistr enc prg (replacePRG targetSeed idx0 idx1 expr))) := by
+
+  -- 1. Rewrite the goal to be in terms of our reduction and the two seeded oracles
+  rw [← reductionToPrgOracleRealEq enc prg expr targetSeed idx0 idx1]
+  rw [← reductionToPrgOracleIdealEq enc prg expr targetSeed idx0 idx1 H_diff H_fresh0 H_fresh1]
+
+  -- 2. Apply your framework's Oracle Indistinguishability lemma here
+  sorry
 
 end PRG
