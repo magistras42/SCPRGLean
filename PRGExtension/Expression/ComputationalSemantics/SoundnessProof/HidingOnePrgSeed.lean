@@ -19,7 +19,7 @@ def reductionToPrgOracle (enc : encryptionScheme) (prg : prgScheme)
   {s : Shape} (expr : Expression s) (targetSeed : Expression Shape.KeyS) (idx0 idx1 : ℕ)
   (κ : ℕ) : OracleComp (withRandom (oracleSpecPrg κ)) (BitVector (shapeLength κ (enc κ) s)) := do
 
-  -- FIX 1 & 2: We use `withRandom` and pass `Sum.inr ()` to route the query to the PRG oracle!
+  -- Use `withRandom` and pass `Sum.inr ()` to route the query to the PRG oracle!
   let (val0, val1) ← (withRandom (oracleSpecPrg κ)).query (Sum.inr ()) ()
 
   -- 3. Evaluate the replaced expression, forcing idx0 to val0 and idx1 to val1 in the environment.
@@ -73,11 +73,11 @@ theorem symbolicToSemanticIndistinguishabilityPrgIdealization
     (famDistrLift (exprToFamDistr enc prg expr))
     (famDistrLift (exprToFamDistr enc prg (replacePRG targetSeed idx0 idx1 expr))) := by
 
-  -- 1. Rewrite the goal to be in terms of our reduction and the two seeded oracles
+  -- Rewrite the goal to be in terms of our reduction and the two seeded oracles
   rw [← reductionToPrgOracleRealEq enc prg expr targetSeed idx0 idx1]
   rw [← reductionToPrgOracleIdealEq enc prg expr targetSeed idx0 idx1 H_diff H_fresh0 H_fresh1]
 
-  -- 2. Apply your framework's Oracle Indistinguishability lemma here
+  -- Apply the framework's Oracle Indistinguishability lemma here
   sorry
 
 end PRG

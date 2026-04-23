@@ -13,7 +13,7 @@ require "leanprover-community" / "mathlib"
 
 
 @[default_target]
-lean_lib «VCVio2» where
+lean_lib «SymbolicGarbledCircuitsInLean» where
   -- add any library configuration options here
 
 lean_lib «PRGExtension» where
