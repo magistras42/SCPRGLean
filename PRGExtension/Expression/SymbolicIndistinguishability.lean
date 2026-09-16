@@ -295,6 +295,16 @@ lemma strictYields_trans (a b : Expression Shape.KeyS) (hab : strictYields a b =
       · subst h; exact Or.inr hab
       · exact Or.inr (strictYields_trans a b hab sd h)
 
+lemma exprKeys_key : ∀ k : Expression Shape.KeyS, exprKeys k = {k}
+  | Expression.VarK _ => rfl
+  | Expression.G0 _ => rfl
+  | Expression.G1 _ => rfl
+
+lemma extractKeys_key : ∀ k : Expression Shape.KeyS, extractKeys k = {k}
+  | Expression.VarK _ => rfl
+  | Expression.G0 _ => rfl
+  | Expression.G1 _ => rfl
+
 /-- `k ≺ k'` means `k` occurs in `k'`'s chain. -/
 lemma strictYields_mem_keySubterms : ∀ (a b : Expression Shape.KeyS),
     strictYields a b = true → a ∈ keySubterms b

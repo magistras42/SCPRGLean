@@ -20,15 +20,39 @@ def labelKeys : {b : WireBundle} -> labelType b -> Finset (Expression Shape.KeyS
   | WireBundle.SimpleB, l => {l.key0, l.key1}
   | WireBundle.PairB _ _, (l1, l2) => labelKeys l1 ∪ labelKeys l2
 
+lemma exprKeys_labelToExpr : ∀ {b : WireBundle} (u : labelType b),
+    exprKeys (labelToExpr u) = labelKeys u
+  | WireBundle.SimpleB, l => by
+      simp [labelToExpr, exprKeys, labelKeys, exprKeys_key, Finset.insert_eq]
+  | WireBundle.PairB o1 o2, (l1, l2) => by
+      simp only [labelToExpr, exprKeys, labelKeys]
+      rw [exprKeys_labelToExpr l1, exprKeys_labelToExpr l2]
+
+lemma extractKeys_labelToExpr : ∀ {b : WireBundle} (u : labelType b),
+    extractKeys (labelToExpr u) = labelKeys u
+  | WireBundle.SimpleB, l => by
+      simp [labelToExpr, extractKeys, labelKeys, extractKeys_key, Finset.insert_eq]
+  | WireBundle.PairB o1 o2, (l1, l2) => by
+      simp only [labelToExpr, extractKeys, labelKeys]
+      rw [extractKeys_labelToExpr l1, extractKeys_labelToExpr l2]
+
+/-- The labels of a bundle are pairwise distinct and use disjoint key sets. -/
+def DistinctLabels : {b : WireBundle} -> labelType b -> Prop
+  | WireBundle.SimpleB, l => l.key0 ≠ l.key1
+  | WireBundle.PairB _ _, (l1, l2) =>
+      DistinctLabels l1 ∧ DistinctLabels l2 ∧ labelKeys l1 ∩ labelKeys l2 = ∅
+
 /--
   LM18 §5: a label expression `w` is *strongly independent* when `Keys(w)` is an
-  independent set of keys, a single label `(b,(k⁰,k¹))` has `k⁰ ≠ k¹`, and the two halves
-  of a pair use disjoint key sets.
+  independent set of keys, each single label has `k⁰ ≠ k¹`, and the two halves of a pair
+  use disjoint key sets.
+
+  Note the first clause is about `Keys(w)` **as a whole** — disjointness of the two halves
+  is not enough on its own, since `k` and `G0 k` can sit in disjoint halves yet still be
+  dependent.
 -/
-def StronglyIndependent : {b : WireBundle} -> labelType b -> Prop
-  | WireBundle.SimpleB, l => IndependentKeys {l.key0, l.key1} ∧ l.key0 ≠ l.key1
-  | WireBundle.PairB _ _, (l1, l2) =>
-      StronglyIndependent l1 ∧ StronglyIndependent l2 ∧ labelKeys l1 ∩ labelKeys l2 = ∅
+def StronglyIndependent {b : WireBundle} (u : labelType b) : Prop :=
+  IndependentKeys (labelKeys u) ∧ DistinctLabels u
 
 /--
   LM18 equation (1), the *label invariant* (the paper's "Condition 1"): the bit is an
@@ -110,8 +134,8 @@ def Lemma5 : Prop :=
     StronglyIndependent u → LabelsBelow ctr u →
     StronglyIndependent (gb c u ctr).2.1 ∧
     ∀ k ∈ labelKeys (gb c u ctr).2.1,
-      (∀ k' ∈ exprKeys (garbledWithLabels c (gb c u ctr).1 u), strictYields k k' = false) ∧
-      (∃ k' ∈ extractKeys (garbledWithLabels c (gb c u ctr).1 u), yields k' k)
+      (∀ k' ∈ exprKeys (gb c u ctr).1 ∪ labelKeys u, strictYields k k' = false) ∧
+      (∃ k' ∈ extractKeys (gb c u ctr).1 ∪ labelKeys u, yields k' k)
 
 /--
   **LM18 Lemma 6.**  For every key `k` used as an *encryption* key inside a garbled
@@ -131,7 +155,7 @@ def Lemma6 : Prop :=
     ∀ k ∈ encKeys (gb c u ctr).1,
       (∀ k' ∈ exprKeys (gb c u ctr).1, strictYields k k' = false) ∧
       (∀ k' ∈ labelKeys (gb c u ctr).2.1, ¬ yields k k') ∧
-      (∃ k' ∈ extractKeys (garbledWithLabels c (gb c u ctr).1 u), yields k' k)
+      (∃ k' ∈ extractKeys (gb c u ctr).1 ∪ labelKeys u, yields k' k)
 
 /-- `c'` occurs as a sub-circuit of `c`.  LM18 quantifies Lemmas 7 and 8 over the
     sub-circuits of one fixed circuit, because the key set `S` they refer to is the
