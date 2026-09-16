@@ -10,10 +10,6 @@ wire keys with the PRG, mirroring `Gb(Dup, ·)`.
 
 namespace PRG
 
-abbrev encodedLabelType : WireBundle -> Type :=
-  bundleType (Expression (Shape.PairS Shape.BitS Shape.KeyS))
-abbrev maskedLabelType : WireBundle -> Type := bundleType (Expression Shape.BitS)
-
 def extractPair : {s1 s2 : Shape} -> (e : Expression (Shape.PairS s1 s2)) ->
     Option (Expression s1 × Expression s2)
   | _, _, Expression.Pair e1 e2 => some (e1, e2)

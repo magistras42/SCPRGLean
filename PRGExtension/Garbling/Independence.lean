@@ -37,9 +37,9 @@ def StronglyIndependent : {b : WireBundle} -> labelType b -> Prop
 -/
 def LabelInvariant (S : Finset (Expression Shape.KeyS)) :
     {b : WireBundle} -> labelType b -> Prop
+  -- the paper's "b ∈ 𝐁" clause is now part of `WireLabel` itself
   | WireBundle.SimpleB, l =>
-      (∃ n, l.bit = BitExpr.VarB n) ∧
-      ((l.key0 ∈ S ∧ l.key1 ∉ S) ∨ (l.key1 ∈ S ∧ l.key0 ∉ S))
+      (l.key0 ∈ S ∧ l.key1 ∉ S) ∨ (l.key1 ∈ S ∧ l.key0 ∉ S)
   | WireBundle.PairB _ _, (l1, l2) => LabelInvariant S l1 ∧ LabelInvariant S l2
 
 /-- LM18 writes `(C̃, u)` for a garbled circuit paired with its input label expression. -/

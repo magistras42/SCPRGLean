@@ -20,6 +20,7 @@ import PRGExtension.Garbling.Circuits
 import PRGExtension.Garbling.GarblingDef
 import PRGExtension.Garbling.Evaluation
 import PRGExtension.Garbling.Independence
+import PRGExtension.Garbling.Correctness
 
 import VCVio2.ToMathlib.Control.MonadTransformer
 import VCVio2.VCVio.OracleComp.OracleComp

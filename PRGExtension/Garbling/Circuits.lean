@@ -43,10 +43,15 @@ def bundleBool : WireBundle -> Type := bundleType Bool
   `Gb(Dup, (b,(k⁰,k¹))) = ε, ((b,(G0 k⁰, G0 k¹)), (b,(G1 k⁰, G1 k¹)))`.
 -/
 structure WireLabel where
-  bit : BitExpr
+  /-- LM18 labels always carry an *atomic* bit symbol `B_h` (this is the first clause of
+      the paper's Condition 1), so we store its index rather than a general `BitExpr`. -/
+  bit : ℕ
   key0 : Expression Shape.KeyS
   key1 : Expression Shape.KeyS
 deriving DecidableEq, Repr
+
+/-- The label's bit symbol `B_h`. -/
+def WireLabel.bitE (l : WireLabel) : BitExpr := BitExpr.VarB l.bit
 
 @[simp]
 def labelType : WireBundle -> Type := bundleType WireLabel
@@ -105,6 +110,10 @@ def garbledShape : {input output : WireBundle} -> Circuit input output -> Shape 
 def encodedShape : WireBundle -> Shape := wireBundle2Shape (Shape.PairS Shape.BitS Shape.KeyS)
 /-- Shape of an output-mask bundle: one bit per wire. -/
 def maskShape : WireBundle -> Shape := wireBundle2Shape Shape.BitS
+abbrev encodedLabelType : WireBundle -> Type :=
+  bundleType (Expression (Shape.PairS Shape.BitS Shape.KeyS))
+abbrev maskedLabelType : WireBundle -> Type := bundleType (Expression Shape.BitS)
+
 /-- Shape of a label expression: one `(b,(k⁰,k¹))` per wire. -/
 def labelShape : WireBundle -> Shape :=
   wireBundle2Shape (Shape.PairS Shape.BitS (Shape.PairS Shape.KeyS Shape.KeyS))

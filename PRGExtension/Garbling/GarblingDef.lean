@@ -12,7 +12,7 @@ namespace PRG
     `B_h = VarB h` and keys `K_h⁰ = VarK (2h)`, `K_h¹ = VarK (2h+1)`. -/
 def makeLabels : (input : WireBundle) -> ℕ -> labelType input × ℕ
   | WireBundle.SimpleB, i =>
-      (⟨BitExpr.VarB i, Expression.VarK (2*i), Expression.VarK (2*i+1)⟩, i+1)
+      (⟨i, Expression.VarK (2*i), Expression.VarK (2*i+1)⟩, i+1)
   | WireBundle.PairB o1 o2, i =>
       let (l1, i1) := makeLabels o1 i
       let (l2, i2) := makeLabels o2 i1
@@ -45,17 +45,17 @@ def gb : {input output : WireBundle} -> (c : Circuit input output) -> labelType 
       let (c2', b'', ctr2) := gb c2 b' ctr1
       (Expression.Pair c1' c2', b'', ctr2)
   | _, _, Circuit.NandC, (li, lj), ctr =>
-      let Bh := BitExpr.VarB ctr
+      let Bh : BitExpr := BitExpr.VarB ctr
       let Kh0 : Expression Shape.KeyS := Expression.VarK (2*ctr)
       let Kh1 : Expression Shape.KeyS := Expression.VarK (2*ctr+1)
       let c00 := gbEntry li.key0 lj.key0 Kh1 (BitExpr.Not Bh)
       let c01 := gbEntry li.key0 lj.key1 Kh1 (BitExpr.Not Bh)
       let c10 := gbEntry li.key1 lj.key0 Kh1 (BitExpr.Not Bh)
       let c11 := gbEntry li.key1 lj.key1 Kh0 Bh
-      (Expression.Perm (Expression.BitE li.bit)
-         (Expression.Perm (Expression.BitE lj.bit) c00 c01)
-         (Expression.Perm (Expression.BitE lj.bit) c10 c11),
-       ⟨Bh, Kh0, Kh1⟩, ctr+1)
+      (Expression.Perm (Expression.BitE li.bitE)
+         (Expression.Perm (Expression.BitE lj.bitE) c00 c01)
+         (Expression.Perm (Expression.BitE lj.bitE) c10 c11),
+       ⟨ctr, Kh0, Kh1⟩, ctr+1)
 
 /--
   `Sim` (LM18 §5).  Identical to `Gb` except at `NAnd`, where every one of the four
@@ -78,50 +78,60 @@ def sim : {input output : WireBundle} -> (c : Circuit input output) -> labelType
       let (c2', b'', ctr2) := sim c2 b' ctr1
       (Expression.Pair c1' c2', b'', ctr2)
   | _, _, Circuit.NandC, (li, lj), ctr =>
-      let Bh := BitExpr.VarB ctr
+      let Bh : BitExpr := BitExpr.VarB ctr
       let Kh0 : Expression Shape.KeyS := Expression.VarK (2*ctr)
       let Kh1 : Expression Shape.KeyS := Expression.VarK (2*ctr+1)
       let e00 := gbEntry li.key0 lj.key0 Kh0 Bh
       let e01 := gbEntry li.key0 lj.key1 Kh0 Bh
       let e10 := gbEntry li.key1 lj.key0 Kh0 Bh
       let e11 := gbEntry li.key1 lj.key1 Kh0 Bh
-      (Expression.Perm (Expression.BitE li.bit)
-         (Expression.Perm (Expression.BitE lj.bit) e00 e01)
-         (Expression.Perm (Expression.BitE lj.bit) e10 e11),
-       ⟨Bh, Kh0, Kh1⟩, ctr+1)
+      (Expression.Perm (Expression.BitE li.bitE)
+         (Expression.Perm (Expression.BitE lj.bitE) e00 e01)
+         (Expression.Perm (Expression.BitE lj.bitE) e10 e11),
+       ⟨ctr, Kh0, Kh1⟩, ctr+1)
 
 -- ---------------------------------------------------------------------------------
 -- Encoding, masks, and the two top-level algorithms.
 -- ---------------------------------------------------------------------------------
 
 /-- `GEnc` (LM18 §4). -/
-def gEnc : {b : WireBundle} -> labelType b -> bundleBool b -> Expression (encodedShape b)
+def gEnc : {b : WireBundle} -> labelType b -> bundleBool b -> encodedLabelType b
   | WireBundle.SimpleB, l, x =>
-      cond x (Expression.Pair (Expression.BitE (BitExpr.Not l.bit)) l.key1)
-             (Expression.Pair (Expression.BitE l.bit) l.key0)
-  | WireBundle.PairB _ _, (l1, l2), (x1, x2) => Expression.Pair (gEnc l1 x1) (gEnc l2 x2)
+      cond x (Expression.Pair (Expression.BitE (BitExpr.Not l.bitE)) l.key1)
+             (Expression.Pair (Expression.BitE l.bitE) l.key0)
+  | WireBundle.PairB _ _, (l1, l2), (x1, x2) => (gEnc l1 x1, gEnc l2 x2)
 
 /-- `GMask` (LM18 §4). -/
-def gMask : {b : WireBundle} -> labelType b -> Expression (maskShape b)
-  | WireBundle.SimpleB, l => Expression.BitE l.bit
-  | WireBundle.PairB _ _, (l1, l2) => Expression.Pair (gMask l1) (gMask l2)
+def gMask : {b : WireBundle} -> labelType b -> maskedLabelType b
+  | WireBundle.SimpleB, l => Expression.BitE l.bitE
+  | WireBundle.PairB _ _, (l1, l2) => (gMask l1, gMask l2)
 
 /-- `SEnc` (LM18 §5): the simulator has no input, so it always takes the first key. -/
-def sEnc : {b : WireBundle} -> labelType b -> Expression (encodedShape b)
-  | WireBundle.SimpleB, l => Expression.Pair (Expression.BitE l.bit) l.key0
-  | WireBundle.PairB _ _, (l1, l2) => Expression.Pair (sEnc l1) (sEnc l2)
+def sEnc : {b : WireBundle} -> labelType b -> encodedLabelType b
+  | WireBundle.SimpleB, l => Expression.Pair (Expression.BitE l.bitE) l.key0
+  | WireBundle.PairB _ _, (l1, l2) => (sEnc l1, sEnc l2)
 
 /-- `SMask` (LM18 §5): the masks are adjusted by the circuit's output value. -/
-def sMask : {b : WireBundle} -> labelType b -> bundleBool b -> Expression (maskShape b)
+def sMask : {b : WireBundle} -> labelType b -> bundleBool b -> maskedLabelType b
   | WireBundle.SimpleB, l, y =>
-      cond y (Expression.BitE (BitExpr.Not l.bit)) (Expression.BitE l.bit)
-  | WireBundle.PairB _ _, (l1, l2), (y1, y2) => Expression.Pair (sMask l1 y1) (sMask l2 y2)
+      cond y (Expression.BitE (BitExpr.Not l.bitE)) (Expression.BitE l.bitE)
+  | WireBundle.PairB _ _, (l1, l2), (y1, y2) => (sMask l1 y1, sMask l2 y2)
+
+def encodedLabelToExpr : {b : WireBundle} -> encodedLabelType b -> Expression (encodedShape b)
+  | WireBundle.SimpleB, x => x
+  | WireBundle.PairB _ _, (l1, l2) =>
+      Expression.Pair (encodedLabelToExpr l1) (encodedLabelToExpr l2)
+
+def maskedLabelToExpr : {b : WireBundle} -> maskedLabelType b -> Expression (maskShape b)
+  | WireBundle.SimpleB, x => x
+  | WireBundle.PairB _ _, (m1, m2) =>
+      Expression.Pair (maskedLabelToExpr m1) (maskedLabelToExpr m2)
 
 /-- A label expression, viewed as an `Expression`.  LM18 writes `(C̃, u)` for the pairing of
     a garbled circuit with a label expression; this is the `u` half. -/
 def labelToExpr : {b : WireBundle} -> labelType b -> Expression (labelShape b)
   | WireBundle.SimpleB, l =>
-      Expression.Pair (Expression.BitE l.bit) (Expression.Pair l.key0 l.key1)
+      Expression.Pair (Expression.BitE l.bitE) (Expression.Pair l.key0 l.key1)
   | WireBundle.PairB _ _, (l1, l2) => Expression.Pair (labelToExpr l1) (labelToExpr l2)
 
 def garbleShapeFull {s t : WireBundle} (c : Circuit s t) : Shape :=
@@ -130,15 +140,17 @@ def garbleShapeFull {s t : WireBundle} (c : Circuit s t) : Shape :=
 /-- `Garble(C, x)` (LM18 §4). -/
 def Garble {s t : WireBundle} (c : Circuit s t) (x : bundleBool s) :
     Expression (garbleShapeFull c) :=
-  let (u, ctr) := makeLabels s 0
-  let r := gb c u ctr
-  Expression.Pair r.1 (Expression.Pair (gEnc u x) (gMask r.2.1))
+  let u := (makeLabels s 0).1
+  let r := gb c u (makeLabels s 0).2
+  Expression.Pair r.1
+    (Expression.Pair (encodedLabelToExpr (gEnc u x)) (maskedLabelToExpr (gMask r.2.1)))
 
 /-- `Simulate(C, y)` (LM18 §5). -/
 def Simulate {s t : WireBundle} (c : Circuit s t) (y : bundleBool t) :
     Expression (garbleShapeFull c) :=
-  let (u, ctr) := makeLabels s 0
-  let r := sim c u ctr
-  Expression.Pair r.1 (Expression.Pair (sEnc u) (sMask r.2.1 y))
+  let u := (makeLabels s 0).1
+  let r := sim c u (makeLabels s 0).2
+  Expression.Pair r.1
+    (Expression.Pair (encodedLabelToExpr (sEnc u)) (maskedLabelToExpr (sMask r.2.1 y)))
 
 end PRG
