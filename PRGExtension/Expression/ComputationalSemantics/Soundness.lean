@@ -31,6 +31,12 @@ theorem symbolicToSemanticIndistinguishability
   (HEncIndCpa : encryptionSchemeIndCpa (fun {_ _ _} => IsPolyTime) enc)
   (HPrgSecure : prgSchemeSecure (fun {_ _ _} => IsPolyTime) prg)
   {shape : Shape} (expr1 expr2 : Expression shape)
+  -- Side condition, see `hidingSideCondition` (LM18 Lemma 3, property 1).  Discharging it
+  -- in general requires LM18 Lemma 2 / Theorem 1 (pseudorandom key renaming), which is
+  -- not yet formalised; it holds whenever `Roots(Keys(·)) ⊆ 𝐊` at every stage of the
+  -- fixpoint.  It is vacuously satisfiable for PRG-free expressions.
+  (Hatomic1 : ∀ S : Finset (Expression Shape.KeyS), hidingSideCondition (hideEncrypted S expr1))
+  (Hatomic2 : ∀ S : Finset (Expression Shape.KeyS), hidingSideCondition (hideEncrypted S expr2))
   (Hi : symIndistinguishable expr1 expr2) :
   CompIndistinguishabilityDistr (fun {_ _ _} => IsPolyTime)
     (famDistrLift (exprToFamDistr enc prg expr1))
@@ -48,8 +54,8 @@ theorem symbolicToSemanticIndistinguishability
   -- Computational Transitivity Hop 1: expr1 ≈ adversaryView expr1
   apply indTrans (fun {I Spec Output} ↦ IsPolyTime)
   -- HOP 1: Prove expr1 ≈ adversaryView expr1
-  exact symbolicToSemanticIndistinguishabilityAdversaryView IsPolyTime HPolyTime Hreduction HreductionPrg enc prg HEncIndCpa HPrgSecure expr1
+  exact symbolicToSemanticIndistinguishabilityAdversaryView IsPolyTime HPolyTime Hreduction HreductionPrg enc prg HEncIndCpa HPrgSecure expr1 Hatomic1
   -- HOP 2: adversaryView expr1 ≈ expr2
   rw [Hi2]
   apply indSym
-  exact symbolicToSemanticIndistinguishabilityAdversaryView IsPolyTime HPolyTime Hreduction HreductionPrg enc prg HEncIndCpa HPrgSecure expr2
+  exact symbolicToSemanticIndistinguishabilityAdversaryView IsPolyTime HPolyTime Hreduction HreductionPrg enc prg HEncIndCpa HPrgSecure expr2 Hatomic2

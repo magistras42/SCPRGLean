@@ -29,21 +29,28 @@ def seededPrgRealOracle (prg : prgScheme) : famSeededOracle (fun κ ↦ oracleSp
 }
 
 -- Ideal World (Random Oracle)
+--
+-- NOTE (fix, see CHANGELOG 2026-09-16): the randomness MUST live in the seed, not in
+-- the query implementation.  `famSeededOracle` samples `Seed` once and then runs a
+-- *stateless* `queryImpl` on every query.  The previous version sampled fresh `(r0,r1)`
+-- inside `impl`, so the ideal oracle answered two queries with independent values while
+-- the real oracle answered both with the same `(prg0 seed, prg1 seed)`.  A distinguisher
+-- that queries twice and compares therefore won with probability `1 - 2^(-2κ)`, making
+-- `prgSchemeSecure` unsatisfiable and every theorem assuming it vacuous.
 noncomputable
-def prgIdealOracleImpl (κ : ℕ) : QueryImpl (oracleSpecPrg κ) (OptionT PMF) := {
+def prgIdealOracleImpl (κ : ℕ) (r : BitVector κ × BitVector κ) :
+    QueryImpl (oracleSpecPrg κ) (OptionT PMF) := {
   impl
-  | OracleSpec.OracleQuery.query _ _ => do
-    let r0 ← liftM (PMF.uniformOfFintype (BitVector κ))
-    let r1 ← liftM (PMF.uniformOfFintype (BitVector κ))
-    return (r0, r1)
+  | OracleSpec.OracleQuery.query _ _ => pure r
 }
 
--- Wrap it in the framework's seeded oracle structure (with a dummy Unit seed)
+-- Wrap it in the framework's seeded oracle structure.  The seed is the pair of answers,
+-- drawn uniformly once, exactly mirroring `seededPrgRealOracle` which draws one seed once.
 noncomputable
 def seededPrgIdealOracle : famSeededOracle (fun κ ↦ oracleSpecPrg κ) := {
-  Seed := fun _ => Unit
-  seedDistr := fun _ => PMF.pure ()
-  queryImpl := fun κ _ => prgIdealOracleImpl κ
+  Seed := fun κ => BitVector κ × BitVector κ
+  seedDistr := fun κ => PMF.uniformOfFintype (BitVector κ × BitVector κ)
+  queryImpl := fun κ r => prgIdealOracleImpl κ r
 }
 
 -- A PRG scheme is secure if its real distribution is computationally
@@ -51,30 +58,9 @@ def seededPrgIdealOracle : famSeededOracle (fun κ ↦ oracleSpecPrg κ) := {
 def prgSchemeSecure (IsPolyTime : PolyFamOracleCompPred) (prg : prgScheme) : Prop :=
   CompIndistinguishabilitySeededOracle IsPolyTime (seededPrgRealOracle prg) seededPrgIdealOracle
 
-/--
-  The Computational Soundness of the PRG Idealization Step.
-  If the PRG is secure, then the symbolic idealization of G0 and G1
-  into fresh dummy keys (idx0, idx1) results in computationally indistinguishable distributions.
--/
-axiom idealize_PRG_soundness {s : Shape}
-  (enc : encryptionScheme)
-  (prg : prgScheme)
-  (e : Expression s)
-  (targetSeed : Expression Shape.KeyS)
-  (idx0 idx1 : ℕ)
-  (IsPolyTime : PolyFamOracleCompPred) :
-  -- 1. The PRG scheme is computationally secure
-  prgSchemeSecure IsPolyTime prg →
-  -- 2. The adversary does not know the seed
-  (targetSeed ∉ adversaryKeys e) →
-  -- 3. The dummy indices represent independent randomness
-  (idx0 ≠ idx1) →
-  -- 4. Both dummy indices are completely fresh to the expression
-  (Expression.VarK idx0 ∉ keySubterms e) →
-  (Expression.VarK idx1 ∉ keySubterms e) →
-  -- THEN: The real evaluation is computationally indistinguishable from the idealized evaluation.
-  CompIndistinguishabilityDistr IsPolyTime
-    (fun κ => exprToDistr (enc κ) (prg κ) e)
-    (fun κ => exprToDistr (enc κ) (prg κ) (replacePRG targetSeed idx0 idx1 e))
+-- REMOVED (see CHANGELOG 2026-09-16): `axiom idealize_PRG_soundness`.
+-- It was dead (referenced only from a comment in HidingOnePrgSeed.lean) and it asserted,
+-- as an axiom, precisely the theorem that
+-- `symbolicToSemanticIndistinguishabilityPrgIdealization` is supposed to prove.
 
 end PRG

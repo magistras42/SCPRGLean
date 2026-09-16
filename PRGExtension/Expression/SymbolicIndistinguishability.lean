@@ -2,6 +2,7 @@ import Mathlib.Data.Nat.Basic
 import Mathlib.Data.Finset.Basic
 import Mathlib.Data.Finset.Image
 import Mathlib.Data.Finset.Card
+import Mathlib.Data.Finset.Union
 
 
 import PRGExtension.Expression.Defs
@@ -197,8 +198,138 @@ def extractKeys {s : Shape} (p : Expression s) : Finset (Expression Shape.KeyS) 
   -- | Expression.HiddenG1 _ => ∅
   | _ => ∅
 
+-- LM18 `Keys(e)`: every key *as it is used*, without decomposing PRG applications.
+-- This is deliberately different from both `extractKeys` (which drops encryption keys)
+-- and `keySubterms` (which recurses into PRG seeds):
+--   exprKeys (G0 k)      = {G0 k}                    -- NOT {G0 k} ∪ exprKeys k
+--   exprKeys (Enc k e)   = exprKeys k ∪ exprKeys e    -- = {k} ∪ Keys(e)
+--   exprKeys (Hidden k)  = exprKeys k                 -- = {k}, the pattern keeps its key
+def exprKeys {s : Shape} (p : Expression s) : Finset (Expression Shape.KeyS) :=
+  match p with
+  | Expression.VarK e => {Expression.VarK e}
+  | Expression.G0 e => {Expression.G0 e}
+  | Expression.G1 e => {Expression.G1 e}
+  | Expression.Pair p1 p2 => exprKeys p1 ∪ exprKeys p2
+  | Expression.Perm _ p1 p2 => exprKeys p1 ∪ exprKeys p2
+  | Expression.Enc k e => exprKeys k ∪ exprKeys e
+  | Expression.Hidden k => exprKeys k
+  | _ => ∅
+
+-- LM18 `k ≺ k'`: `k'` is a *strict* PRG-descendant of `k`, i.e. `k' ∈ 𝖦⁺(k)`.
+def strictYields (k : Expression Shape.KeyS) : Expression Shape.KeyS → Bool
+  | Expression.G0 seed => (seed == k) || strictYields k seed
+  | Expression.G1 seed => (seed == k) || strictYields k seed
+  | _ => false
+
+-- If `k` is not a strict PRG-ancestor of the key expression `e`, and is not `e` itself,
+-- then `k` does not occur anywhere in `e`'s seed chain.
+lemma strictYields_keySubterms : ∀ (k e : Expression Shape.KeyS),
+    strictYields k e = false → e ≠ k → k ∉ keySubterms e
+  | k, Expression.VarK n, _, hne => by
+      simp only [keySubterms, Finset.mem_singleton]
+      exact fun h => hne h.symm
+  | k, Expression.G0 sd, h, hne => by
+      simp only [strictYields, Bool.or_eq_false_iff, beq_eq_false_iff_ne] at h
+      simp only [keySubterms, Finset.mem_union, Finset.mem_singleton, not_or]
+      exact ⟨fun hc => hne hc.symm, strictYields_keySubterms k sd h.2 h.1⟩
+  | k, Expression.G1 sd, h, hne => by
+      simp only [strictYields, Bool.or_eq_false_iff, beq_eq_false_iff_ne] at h
+      simp only [keySubterms, Finset.mem_union, Finset.mem_singleton, not_or]
+      exact ⟨fun hc => hne hc.symm, strictYields_keySubterms k sd h.2 h.1⟩
+
+-- LM18 Lemma 3, property 3: `𝖦⁺(VarK key₀) ∩ Keys(e) = ∅`, i.e. `key₀` is never used as a
+-- PRG seed anywhere in `e`.  This is exactly what the IND-CPA reduction needs: the
+-- reduction never learns the value of `key₀`, so it must never be required to compute
+-- `prg0 key₀` or `prg1 key₀`.
+def seedFree (key₀ : ℕ) {s : Shape} (e : Expression s) : Prop :=
+  ∀ k ∈ exprKeys e, strictYields (Expression.VarK key₀) k = false
+
+lemma seedFree_mono {key₀ : ℕ} {s t : Shape} {e : Expression s} {e' : Expression t}
+  (hsub : exprKeys e' ⊆ exprKeys e) (h : seedFree key₀ e) : seedFree key₀ e' :=
+  fun k hk => h k (hsub hk)
+
+-- Destructuring `seedFree` along the constructors, for use inside inductions.
+lemma seedFree_pair_left {key₀ : ℕ} {s₁ s₂ : Shape} {e1 : Expression s₁} {e2 : Expression s₂}
+  (h : seedFree key₀ (Expression.Pair e1 e2)) : seedFree key₀ e1 :=
+  fun k hk => h k (by simp [exprKeys, hk])
+
+lemma seedFree_pair_right {key₀ : ℕ} {s₁ s₂ : Shape} {e1 : Expression s₁} {e2 : Expression s₂}
+  (h : seedFree key₀ (Expression.Pair e1 e2)) : seedFree key₀ e2 :=
+  fun k hk => h k (by simp [exprKeys, hk])
+
+lemma seedFree_perm_left {key₀ : ℕ} {s : Shape} {b : Expression Shape.BitS} {e1 e2 : Expression s}
+  (h : seedFree key₀ (Expression.Perm b e1 e2)) : seedFree key₀ e1 :=
+  fun k hk => h k (by simp [exprKeys, hk])
+
+lemma seedFree_perm_right {key₀ : ℕ} {s : Shape} {b : Expression Shape.BitS} {e1 e2 : Expression s}
+  (h : seedFree key₀ (Expression.Perm b e1 e2)) : seedFree key₀ e2 :=
+  fun k hk => h k (by simp [exprKeys, hk])
+
+lemma seedFree_enc_key {key₀ : ℕ} {s : Shape} {k0 : Expression Shape.KeyS} {e : Expression s}
+  (h : seedFree key₀ (Expression.Enc k0 e)) : seedFree key₀ k0 :=
+  fun k hk => h k (by simp [exprKeys, hk])
+
+lemma seedFree_enc_msg {key₀ : ℕ} {s : Shape} {k0 : Expression Shape.KeyS} {e : Expression s}
+  (h : seedFree key₀ (Expression.Enc k0 e)) : seedFree key₀ e :=
+  fun k hk => h k (by simp [exprKeys, hk])
+
+lemma seedFree_hidden {key₀ : ℕ} {s : Shape} {k0 : Expression Shape.KeyS}
+  (h : seedFree key₀ (Expression.Hidden (s := s) k0)) : seedFree key₀ k0 :=
+  fun k hk => h k (by simp [exprKeys, hk])
+
+-- On a `G`-node, seed-freeness of the node gives absence from the whole seed chain.
+lemma seedFree_G_inner {key₀ : ℕ} {e : Expression Shape.KeyS}
+  (h : strictYields (Expression.VarK key₀) e = false) (hne : e ≠ Expression.VarK key₀) :
+  Expression.VarK key₀ ∉ keySubterms e :=
+  strictYields_keySubterms _ _ h hne
+
+lemma seedFree_G0_chain {key₀ : ℕ} {e : Expression Shape.KeyS}
+  (h : seedFree key₀ (Expression.G0 e)) : Expression.VarK key₀ ∉ keySubterms e := by
+  have h1 : strictYields (Expression.VarK key₀) (Expression.G0 e) = false :=
+    h _ (by simp [exprKeys])
+  simp only [strictYields, Bool.or_eq_false_iff, beq_eq_false_iff_ne] at h1
+  exact seedFree_G_inner h1.2 h1.1
+
+lemma seedFree_G1_chain {key₀ : ℕ} {e : Expression Shape.KeyS}
+  (h : seedFree key₀ (Expression.G1 e)) : Expression.VarK key₀ ∉ keySubterms e := by
+  have h1 : strictYields (Expression.VarK key₀) (Expression.G1 e) = false :=
+    h _ (by simp [exprKeys])
+  simp only [strictYields, Bool.or_eq_false_iff, beq_eq_false_iff_ne] at h1
+  exact seedFree_G_inner h1.2 h1.1
+
+def isAtomicKey : Expression Shape.KeyS → Bool
+  | Expression.VarK _ => true
+  | _ => false
+
+-- The ancestor clause of LM18 Definition 3: `{k ∈ K | ∃ k' ∈ K. k ≺ k'}`.
+-- If both a key and a strict PRG-descendant of it occur in the expression, the two are
+-- not symbolically independent, so no reduction may treat the ancestor as an unknown
+-- uniform key; it is conservatively declared recovered.
+def ancestorKeys (K : Finset (Expression Shape.KeyS)) : Finset (Expression Shape.KeyS) :=
+  K.biUnion (fun k' => K.filter (fun k => strictYields k k'))
+
+lemma mem_ancestorKeys {K : Finset (Expression Shape.KeyS)} {k : Expression Shape.KeyS} :
+  k ∈ ancestorKeys K ↔ (k ∈ K ∧ ∃ k' ∈ K, strictYields k k' = true) := by
+  simp only [ancestorKeys, Finset.mem_biUnion, Finset.mem_filter]
+  constructor
+  · rintro ⟨k', hk', hk, h⟩; exact ⟨hk, k', hk', h⟩
+  · rintro ⟨hk, k', hk', h⟩; exact ⟨k', hk', hk, h⟩
+
+lemma ancestorKeys_subset (K : Finset (Expression Shape.KeyS)) : ancestorKeys K ⊆ K := by
+  intro k hk; exact (mem_ancestorKeys.mp hk).1
+
+lemma ancestorKeysMonotone {K1 K2 : Finset (Expression Shape.KeyS)} (h : K1 ⊆ K2) :
+  ancestorKeys K1 ⊆ ancestorKeys K2 := by
+  intro k hk
+  obtain ⟨hkK, k', hk', hyield⟩ := mem_ancestorKeys.mp hk
+  exact mem_ancestorKeys.mpr ⟨h hkK, k', h hk', hyield⟩
+
 -- Next, we define the 'key recovery operator (𝓕ₑ from the paper), that given a set of keys,
--- hides the encrypted parts of the expression and computes `extractKeys` from the resulting expressions.
+-- hides the encrypted parts of the expression and computes the recoverable keys of the result.
+--
+-- LM18 Definition 3:
+--   r(e) = 𝖦*({ k ∈ Keys(e) | (k ⋐ e) ∨ (∃ k' ∈ Keys(e). k ≺ k') })
+-- The first disjunct is `extractKeys view`; the second is `ancestorKeys (exprKeys view)`.
 def keyRecovery {s : Shape} (p : Expression s) (S : Finset (Expression Shape.KeyS)) : Finset (Expression Shape.KeyS) :=
   -- Determine the finite universe of sub-keys in the expression
   let univKeys := keySubterms p
@@ -206,8 +337,9 @@ def keyRecovery {s : Shape} (p : Expression s) (S : Finset (Expression Shape.Key
   let expandedS := prgClosure univKeys S
   -- The adversary attempts to decrypt the expression using these expanded keys
   let view := hideEncrypted expandedS p
-  -- The adversary extracts whatever new plaintext keys are revealed
-  let extracted := extractKeys view
+  -- The adversary extracts the keys it can read off directly ...
+  -- ... together with every key that has a strict PRG-descendant in the view.
+  let extracted := extractKeys view ∪ ancestorKeys (exprKeys view)
   -- The adversary computes all PRG derivations for newly extracted keys
   prgClosure univKeys extracted
 
@@ -728,35 +860,137 @@ lemma prgClosureContained (U S : Finset (Expression Shape.KeyS)) (h : S ⊆ U) :
       -- Prove that the state after one step is still a subset of U
       exact prgStepContained U S h
 
+-- `exprKeys` (LM18 `Keys`) is monotone for the `Hidden ⊆ Enc` order, exactly like
+-- `extractKeys`.  Needed because `keyRecovery` now consults it.
+lemma exprKeysMonotone {s : Shape} (p1 p2 : Expression s) (h : p1 ⊆ p2) :
+  exprKeys p1 ⊆ exprKeys p2 := by
+  induction p1 with
+  | VarK k =>
+      cases p2 <;> simp_all [ExpressionInclusion, exprKeys]
+  | BitE b =>
+      cases p2; simp_all [ExpressionInclusion, exprKeys]
+  | Eps =>
+      cases p2; simp_all [ExpressionInclusion, exprKeys]
+  | Pair e1 e2 ih1 ih2 =>
+      cases p2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
+      have ⟨h1, h2⟩ := of_decide_eq_true h
+      simp [exprKeys]
+      exact Finset.union_subset_union (ih1 _ h1) (ih2 _ h2)
+  | Perm z e1 e2 _ih_z ih_e1 ih_e2 =>
+      cases p2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
+      have ⟨he1, he2, _hz⟩ := of_decide_eq_true h
+      simp only [exprKeys]
+      exact Finset.union_subset_union (ih_e1 _ he1) (ih_e2 _ he2)
+  | Enc k e _ih_k ih_e =>
+      cases p2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
+      have ⟨hk_bool, he⟩ := of_decide_eq_true h
+      have hk : k = _ := eq_of_beq hk_bool
+      subst hk
+      simp [exprKeys]
+      exact Finset.union_subset_union (Finset.Subset.refl _) (ih_e _ he)
+  | Hidden k =>
+      cases p2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
+      -- p2 = Enc k' e' : exprKeys (Hidden k) = exprKeys k ⊆ exprKeys k' ∪ exprKeys e'
+      · simp only [exprKeys]
+        have hk : k = _ := eq_of_beq h
+        subst hk
+        exact @Finset.subset_union_left (Expression Shape.KeyS) _ _ _
+      -- p2 = Hidden k'
+      · simp only [exprKeys]
+        have hk : k = _ := eq_of_beq h
+        subst hk
+        exact Finset.Subset.refl _
+  | G0 e _ih =>
+      cases p2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
+      have heq : e = _ := shape_K_eq h
+      subst heq
+      simp [exprKeys]
+  | G1 e _ih =>
+      cases p2 <;> simp only [ExpressionInclusion] at h <;> try contradiction
+      have heq : e = _ := shape_K_eq h
+      subst heq
+      simp [exprKeys]
+
+-- Every key *used* in an expression is one of its key subterms, so the ancestor clause
+-- stays inside the finite universe that bounds the fixpoint.
+lemma exprKeys_subset_keySubterms {s : Shape} (p : Expression s) :
+  exprKeys p ⊆ keySubterms p := by
+  induction p with
+  | VarK k => simp [exprKeys, keySubterms]
+  | BitE b => simp [exprKeys, keySubterms]
+  | Eps => simp [exprKeys, keySubterms]
+  | Pair e1 e2 ih1 ih2 =>
+      simp [exprKeys, keySubterms]
+      exact Finset.union_subset_union ih1 ih2
+  | Perm z e1 e2 _ih_z ih1 ih2 =>
+      simp [exprKeys, keySubterms]
+      exact Finset.union_subset_union ih1 ih2
+  | Enc k e ih_k ih_e =>
+      simp only [exprKeys, keySubterms]
+      exact Finset.union_subset_union ih_k ih_e
+  | Hidden k ih_k =>
+      simp only [exprKeys, keySubterms]
+      exact ih_k
+  | G0 e _ih => simp [exprKeys, keySubterms]
+  | G1 e _ih => simp [exprKeys, keySubterms]
+
 lemma keyRecoveryMonotone {s : Shape} (p : Expression s) (S1 S2 : Finset (Expression Shape.KeyS)) (h : S1 ⊆ S2) :
   keyRecovery p S1 ⊆ keyRecovery p S2 := by
-  simp [keyRecovery]
+  simp only [keyRecovery]
   -- S1 ⊆ S2 implies prgClosure U S1 ⊆ prgClosure U S2
   have h_prg1 := prgClosureMonotone (keySubterms p) S1 S2 h
   -- which implies hideEncrypted (prg1) p ⊆ hideEncrypted (prg2) p
   have h_hide := hideEncryptedMonotone _ _ p h_prg1
   -- which implies extractKeys (hide1) ⊆ extractKeys (hide2)
   have h_ext := keyPartsMonotone _ _ h_hide
+  -- and Keys(hide1) ⊆ Keys(hide2), hence the ancestor clause is monotone too
+  have h_keys := exprKeysMonotone _ _ h_hide
   -- which implies the final prgClosure is also a subset
   apply prgClosureMonotone
-  assumption
+  exact Finset.union_subset_union h_ext (ancestorKeysMonotone h_keys)
 
 lemma keyRecoveryContained {s : Shape} (p : Expression s) (S : Finset (Expression Shape.KeyS)) :
   keyRecovery p S ⊆ keySubterms p := by
-  simp [keyRecovery]
+  simp only [keyRecovery]
+  set view := hideEncrypted (prgClosure (keySubterms p) S) p with hview
   -- 1. hideEncrypted is structurally smaller than p
-  have h_hide := hideEncryptedSmallerValue (prgClosure (keySubterms p) S) p
+  have h_hide : view ⊆ p := hideEncryptedSmallerValue (prgClosure (keySubterms p) S) p
   -- 2. So the universe of the hidden view is a subset of the universe of p
   have h_univ := keySubtermsMonotone _ _ h_hide
-  -- 3. The extracted keys of the view are a subset of the universe of the view
-  have h_ext := extractKeys_subset_keySubterms (hideEncrypted (prgClosure (keySubterms p) S) p)
-  -- 4. Therefore, the extracted keys are a subset of the main universe (keySubterms p)
-  have h_ext_sub_univ : extractKeys (hideEncrypted (prgClosure (keySubterms p) S) p) ⊆ keySubterms p :=
-    Finset.Subset.trans h_ext h_univ
-  -- 5. Because the extracted keys are bounded by the universe, their PRG closure is also bounded by the universe
-  apply prgClosureContained
-  assumption
+  -- 3. Both halves of the recovery set are bounded by the universe of the view ...
+  have h_ext : extractKeys view ⊆ keySubterms p :=
+    Finset.Subset.trans (extractKeys_subset_keySubterms view) h_univ
+  have h_anc : ancestorKeys (exprKeys view) ⊆ keySubterms p :=
+    Finset.Subset.trans (ancestorKeys_subset _)
+      (Finset.Subset.trans (exprKeys_subset_keySubterms view) h_univ)
+  -- 4/5. Their union is bounded by the universe, hence so is its PRG closure.
+  -- (NB: `⊆` is shadowed by `ExpressionInclusion` in this file, so we avoid the
+  -- notation on the union and feed `Finset.union_subset` directly.)
+  exact prgClosureContained _ _ (Finset.union_subset h_ext h_anc)
 
+/-
+  ⚠ THIS STATEMENT IS FALSE.  (Established 2026-09-16, see CHANGELOG and
+  `scratch/ExtractKeysSelfCounterexample.lean`, which computes the counterexample.)
+
+      e    = Enc (VarK 0) (VarK 1)
+      keys = {VarK 0}
+
+      hideEncrypted keys e            = Enc (VarK 0) (VarK 1)
+      Y := extractKeys (…)            = {VarK 1}
+      hideEncrypted Y e               = Hidden (VarK 0)      -- VarK 0 ∉ Y
+      extractKeys (hideEncrypted Y e) = ∅
+
+  so `Y ⊆ ∅` fails.  The earlier comment ("mathematically true but not provable with our
+  current definitions") was wrong: the obstruction is not the definitions, it is the
+  statement.
+
+  The `sorry` is retained ONLY because the single consumer,
+  `symbolicToSemanticIndistinguishabilityAdversaryView`, currently routes its fixpoint
+  step through the equally-false intermediate `H_ext_eq`.  The *conclusion* of that step
+  (`hideEncrypted z expr ≈ hideEncrypted (keyRecovery expr z) expr`) is true and follows
+  from IND-CPA applied to the key set `z \ keyRecovery expr z`; restructuring the proof
+  that way is the remaining work.  See PRGExtension-Analysis.md §4.5.
+-/
 lemma extractKeys_hideEncrypted_self {s : Shape} (keys : Finset (Expression 𝕂)) (e : Expression s) :
   extractKeys (hideEncrypted keys e) ⊆ extractKeys (hideEncrypted (extractKeys (hideEncrypted keys e)) e) := by
   induction e <;> simp [extractKeys, hideEncrypted] at *
@@ -852,37 +1086,17 @@ def replacePRG {s : Shape} (targetSeed : Expression 𝕂) (idx0 idx1 : ℕ) (p :
       else
         Expression.G1 (replacePRG targetSeed idx0 idx1 k)
 
-/--
-  Symbolic Equivalence combines structural isomorphism (Garbled Circuit wire swapping)
-  with computational indistinguishability (PRG idealization).
--/
-inductive symbolicEquivalence {s : Shape} : Expression s → Expression s → Prop
-
--- 1. Structural Isomorphism
-| structural (e1 e2 : Expression s) :
-    symIndistinguishable e1 e2 → symbolicEquivalence e1 e2
-
--- 2. Joint PRG Idealization
-| idealize_PRG (e : Expression s) (k : Expression 𝕂) (idx0 idx1 : ℕ) :
-    -- Condition 1: The adversary does not know the seed
-    (k ∉ adversaryKeys e) →
-    -- Condition 2: The two dummy indices must be different to represent independent randomness
-    (idx0 ≠ idx1) →
-    -- Condition 3: Both dummy indices must be completely fresh
-    (Expression.VarK idx0 ∉ keySubterms e) →
-    (Expression.VarK idx1 ∉ keySubterms e) →
-    -- Result: Replacing both simultaneously yields a valid game hop
-    symbolicEquivalence e (replacePRG k idx0 idx1 e)
-
--- 3. Transitivity
-| trans {e1 e2 e3 : Expression s} :
-    symbolicEquivalence e1 e2 →
-    symbolicEquivalence e2 e3 →
-    symbolicEquivalence e1 e3
-
--- 4. Symmetry
-| symm {e1 e2 : Expression s} :
-    symbolicEquivalence e1 e2 →
-    symbolicEquivalence e2 e1
+-- REMOVED (see CHANGELOG 2026-09-16): `inductive symbolicEquivalence`.
+--
+-- It extended `symIndistinguishable` with an `idealize_PRG` constructor performing a
+-- game hop at the level of the *symbolic* relation.  Two problems:
+--   * it was dead code -- nothing consumed it, and `Soundness.lean` still quantifies
+--     over `symIndistinguishable`;
+--   * a symbolic equivalence with a cryptographic hop built into it is no longer decided
+--     by "normalise and compare", which is the property that makes the symbolic method
+--     worth having.
+-- The PRG hop belongs inside the soundness proof (see `HidingOnePrgSeed.lean`), not in
+-- the definition of symbolic equivalence.  `replacePRG` above is kept: it is a genuine
+-- pseudorandom key renaming and is used by the soundness proof.
 
 end PRG
