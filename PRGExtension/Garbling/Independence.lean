@@ -128,6 +128,8 @@ theorem lemma4 : ∀ {s t : WireBundle} (c : Circuit s t) (u : labelType s) (ctr
   `gb_labels_below` (in `Freshness.lean`) shows the hypothesis propagates through `Gb`, so
   it is available at every inductive step, and `Garble` establishes it via
   `makeLabels_below`.
+
+  **Proved** in `Lemma5.lean` (`PRG.lemma5`).
 -/
 def Lemma5 : Prop :=
   ∀ {s t : WireBundle} (c : Circuit s t) (u : labelType s) (ctr : ℕ),
@@ -148,6 +150,10 @@ def Lemma5 : Prop :=
   Together with Lemma 5 this is what rules out the key cycles that would otherwise break
   the IND-CPA reduction: (1) says no descendant of an encrypting key is ever visible, which
   is exactly the `seedFree` side condition of `symbolicToSemanticIndistinguishabilityHidingOneKey`.
+
+  **Condition (3) is proved** in `Lemma5.lean` (`PRG.lemma6_cond3`) — it comes out of the
+  same induction as Lemma 5.  Conditions (1) and (2) need their own induction, which can
+  now be run against `lemma5core`'s three outputs; they are still open.
 -/
 def Lemma6 : Prop :=
   ∀ {s t : WireBundle} (c : Circuit s t) (u : labelType s) (ctr : ℕ),

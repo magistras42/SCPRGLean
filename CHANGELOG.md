@@ -3,6 +3,62 @@
 All notable changes to the proofs and code in this repository.
 Section numbers in brackets refer to [`PRGExtension-Analysis.md`](PRGExtension-Analysis.md).
 
+## [2026-09-16f] LM18 Lemma 5 proved (with Lemma 6's condition (3))
+
+Still `sorry`-free.
+
+### Added — `PRGExtension/Garbling/Lemma5.lean`
+
+**`lemma5` (LM18 Lemma 5) is proved**, together with **`lemma6_cond3`** (LM18 Lemma 6's
+condition (3)).
+
+The two come out of **one** induction, `lemma5core`, which proves three things at once:
+
+1. `Gb` maps strongly independent input labels to strongly independent output labels;
+2. every output key has no strict PRG-descendant in `Keys((C̃,u))`, and is yielded by some
+   key appearing as a *part* of `(C̃,u)`;
+3. every key the garbled circuit *uses* is yielded by some key appearing as a part of
+   `(C̃,u)`.
+
+They cannot be separated: Lemma 5's `First` case needs (3) for the sub-circuit, and (3)'s
+`Compose` case needs Lemma 5's condition (2).  My earlier note that "the four lemmas have
+to be done together" was right in spirit but too pessimistic — 5 and 6(3) suffice as a
+package, and 6(1)/(2) can then be run against them.
+
+Supporting lemmas, all proved:
+
+* `keySubterms_linear` — a key's chain is linearly ordered, which is what licenses LM18's
+  repeated "either `k'' ⪯ k` or `k ≺ k''`" steps;
+* `keySubterms_subset_of_mem`, `yields_mem_keySubterms`, `labelKeys_below`;
+* `exprKeys_gbEntry`, `extractKeys_gbEntry`, `exprKeys_labelToExpr`,
+  `extractKeys_labelToExpr`;
+* `sy_G0_self`/`sy_G1_self`, `sy_of_G0_left`/`sy_of_G1_left`, `sy_G0_k`/`sy_G1_k`, `sy_GG4`,
+  `sy_varK_of_below`, `sy_to_varK`;
+* `lemma5_rearrange` for the `ε`-garbling cases (`Swap`/`Assoc`/`UnAssoc`).
+
+### Changed — `StronglyIndependent` corrected
+
+It now reads `IndependentKeys (labelKeys u) ∧ DistinctLabels u`, following LM18: the
+independence clause is about `Keys(w)` **as a whole**.  My earlier version only required
+per-label independence plus disjointness of the two halves, which is strictly weaker —
+`k` and `G0 k` can sit in disjoint halves and still be dependent, and the `Swap` case needs
+the global version.
+
+### Status of the garbling layer
+
+| obligation | status |
+|---|---|
+| `lemma4` | **proved** |
+| `Lemma5` | **proved** (`lemma5`) |
+| `Lemma6` condition (3) | **proved** (`lemma6_cond3`) |
+| `Lemma6` conditions (1), (2) | open — induction sketched, runs against `lemma5core` |
+| `Lemma7`, `Lemma8` | open — need the label invariant against the real fixpoint `adversaryKeys (Garble c x)` |
+| `Theorem4` | **proved** (`theorem4_holds`) |
+| `Theorem5` | open |
+| `FixpointStepSound` | open |
+
+---
+
 ## [2026-09-16e] Theorem 4 proved; counter-freshness; Lemma 5/6 statements corrected
 
 Still `sorry`-free.  `garbleCorrect` needs only `propext, Quot.sound`.
