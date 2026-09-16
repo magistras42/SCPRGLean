@@ -103,6 +103,32 @@ def hidingSideCondition {s : Shape} (e : Expression s) : Prop :=
   -- property 3: no key removed by the hiding step is used as a PRG seed in `e`
   (∀ n : ℕ, Expression.VarK n ∈ allParts e \ extractKeys e → seedFree n e)
 
+/-- Hiding never manufactures new key subterms, so being PRG-free is preserved. -/
+lemma atomicKeys_hideEncrypted {s : Shape} (S : Finset (Expression Shape.KeyS))
+    {e : Expression s} (h : AtomicKeys e) : AtomicKeys (hideEncrypted S e) :=
+  atomicKeys_of_subset (keySubtermsMonotone _ _ (hideEncryptedSmallerValue S e)) h
+
+/--
+  The side condition is discharged outright for expressions with no PRG structure:
+  every key is atomic (property 1) and nothing can be a seed (property 3).
+
+  So on the PRG-free fragment the extended soundness theorem carries *no* extra
+  hypotheses, i.e. it specialises exactly to the original encryption-only framework.
+  It also shows the side condition is not vacuous.
+-/
+lemma hidingSideCondition_of_atomicKeys {s : Shape} {e : Expression s} (h : AtomicKeys e) :
+  hidingSideCondition e := by
+  constructor
+  · intro k hk
+    have hat : isAtomicKey k = true :=
+      h k (allParts_subset_keySubterms e (Finset.mem_sdiff.mp hk).1)
+    cases k with
+    | VarK n => exact ⟨n, rfl⟩
+    | G0 _ => simp [isAtomicKey] at hat
+    | G1 _ => simp [isAtomicKey] at hat
+  · intro n _
+    exact seedFree_of_atomicKeys h n
+
 def symbolicToSemanticIndistinguishabilityHidingInnerMotive (z : Finset (Expression Shape.KeyS)) : Prop :=
   forall
    (IsPolyTime : PolyFamOracleCompPred) (_HPolyTime : PolyTimeClosedUnderComposition IsPolyTime)

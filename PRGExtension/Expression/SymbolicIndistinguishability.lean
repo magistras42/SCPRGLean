@@ -426,6 +426,16 @@ lemma ancestorKeysMonotone {K1 K2 : Finset (Expression Shape.KeyS)} (h : K1 ⊆ 
   obtain ⟨hkK, k', hk', hyield⟩ := mem_ancestorKeys.mp hk
   exact mem_ancestorKeys.mpr ⟨h hkK, k', h hk', hyield⟩
 
+/-- An expression with no PRG structure at all: every key subterm is an atomic variable.
+    This is the shape an idealisation chain drives an expression towards, and it is also
+    exactly the fragment the original encryption-only framework covers. -/
+def AtomicKeys {s : Shape} (e : Expression s) : Prop :=
+  ∀ k ∈ keySubterms e, isAtomicKey k = true
+
+lemma atomicKeys_of_subset {s t : Shape} {e : Expression s} {e' : Expression t}
+  (hsub : keySubterms e' ⊆ keySubterms e) (h : AtomicKeys e) : AtomicKeys e' :=
+  fun k hk => h k (hsub hk)
+
 /-- The bridge between LM18's independence and the ancestor clause of `keyRecovery`:
     the clause fires on exactly the non-independent key sets. -/
 lemma ancestorKeys_eq_empty_iff (K : Finset (Expression Shape.KeyS)) :
@@ -1051,6 +1061,15 @@ lemma exprKeys_subset_keySubterms {s : Shape} (p : Expression s) :
       exact ih_k
   | G0 e _ih => simp [exprKeys, keySubterms]
   | G1 e _ih => simp [exprKeys, keySubterms]
+
+lemma seedFree_of_atomicKeys {s : Shape} {e : Expression s} (h : AtomicKeys e) (n : ℕ) :
+  seedFree n e := by
+  intro k hk
+  have hat : isAtomicKey k = true := h k (exprKeys_subset_keySubterms e hk)
+  cases k with
+  | VarK m => simp [strictYields]
+  | G0 _ => simp [isAtomicKey] at hat
+  | G1 _ => simp [isAtomicKey] at hat
 
 lemma keyRecoveryMonotone {s : Shape} (p : Expression s) (S1 S2 : Finset (Expression Shape.KeyS)) (h : S1 ⊆ S2) :
   keyRecovery p S1 ⊆ keyRecovery p S2 := by

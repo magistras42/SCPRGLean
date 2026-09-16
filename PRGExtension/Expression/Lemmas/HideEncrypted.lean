@@ -53,6 +53,23 @@ def allParts {s : Shape} (p : Expression s) : Finset (Expression Shape.KeyS) :=
 lemma self_in_allParts (p : Expression Shape.KeyS) : p ∈ allParts p := by
   cases p <;> simp [allParts]
 
+-- Every part of an expression is one of its key subterms.
+lemma allParts_subset_keySubterms {s : Shape} (p : Expression s) :
+  allParts p ⊆ keySubterms p := by
+  induction p with
+  | VarK n => simp [allParts, keySubterms]
+  | BitE b => simp [allParts, keySubterms]
+  | Eps => simp [allParts, keySubterms]
+  | G0 e ih => simp only [allParts, keySubterms]; exact Finset.union_subset_union (Finset.Subset.refl _) ih
+  | G1 e ih => simp only [allParts, keySubterms]; exact Finset.union_subset_union (Finset.Subset.refl _) ih
+  | Pair e1 e2 ih1 ih2 => simp only [allParts, keySubterms]; exact Finset.union_subset_union ih1 ih2
+  | Perm b e1 e2 _ ih1 ih2 => simp only [allParts, keySubterms]; exact Finset.union_subset_union ih1 ih2
+  | Enc k e ihk ihe =>
+      simp only [allParts, keySubterms]
+      exact Finset.union_subset (Finset.Subset.trans ihe Finset.subset_union_right)
+        (Finset.Subset.trans ihk Finset.subset_union_left)
+  | Hidden k _ => simp [allParts]
+
 lemma hideEncryptedEqS {s : Shape} (keys : Finset (Expression Shape.KeyS)) (p : Expression s) :
   hideEncryptedS keys p = hideEncrypted keys p := by
   induction p <;> simp [hideEncryptedS, hideEncrypted]

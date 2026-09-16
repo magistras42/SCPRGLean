@@ -250,19 +250,19 @@ lemma reductionToPrgOracleIdealEq (enc : encryptionScheme) (prg : prgScheme)
 -/
 theorem symbolicToSemanticIndistinguishabilityPrgIdealization
   (IsPolyTime : PolyFamOracleCompPred)
-  (HPolyTime : PolyTimeClosedUnderComposition (fun {I Spec Output} => IsPolyTime))
+  (HPolyTime : PolyTimeClosedUnderComposition (fun {_ _ _} => IsPolyTime))
   (Hreduction : ∀ (enc_ : encryptionScheme) (prg_ : prgScheme) (s_ : Shape)
     (expr_ : Expression s_) (targetSeed_ : Expression Shape.KeyS) (idx0_ idx1_ : ℕ),
     IsPolyTime (fun κ => reductionToPrgOracle enc_ prg_ expr_ targetSeed_ idx0_ idx1_ κ))
   (enc : encryptionScheme)
   (prg : prgScheme)
-  (HPrgSecure : prgSchemeSecure (fun {I Spec Output} => IsPolyTime) prg)
+  (HPrgSecure : prgSchemeSecure (fun {_ _ _} => IsPolyTime) prg)
   {shape : Shape} (expr : Expression shape) (t idx0 idx1 : ℕ)
   (H_seed : Expression.VarK t ∉ exprKeys expr)
   (H_diff : idx0 ≠ idx1)
   (H_fresh0 : Expression.VarK idx0 ∉ keySubterms expr)
   (H_fresh1 : Expression.VarK idx1 ∉ keySubterms expr) :
-  CompIndistinguishabilityDistr (fun {I Spec Output} => IsPolyTime)
+  CompIndistinguishabilityDistr (fun {_ _ _} => IsPolyTime)
     (famDistrLift (exprToFamDistr enc prg expr))
     (famDistrLift (exprToFamDistr enc prg (replacePRG (Expression.VarK t) idx0 idx1 expr))) := by
   rw [← reductionToPrgOracleRealEq enc prg expr t idx0 idx1 H_diff H_seed H_fresh0 H_fresh1]
@@ -302,14 +302,14 @@ inductive PrgHopChain {s : Shape} : Expression s → Expression s → Prop
 -/
 theorem prgHopChainSound
   (IsPolyTime : PolyFamOracleCompPred)
-  (HPolyTime : PolyTimeClosedUnderComposition (fun {I Spec Output} => IsPolyTime))
+  (HPolyTime : PolyTimeClosedUnderComposition (fun {_ _ _} => IsPolyTime))
   (Hreduction : ∀ (enc_ : encryptionScheme) (prg_ : prgScheme) (s_ : Shape)
     (expr_ : Expression s_) (targetSeed_ : Expression Shape.KeyS) (idx0_ idx1_ : ℕ),
     IsPolyTime (fun κ => reductionToPrgOracle enc_ prg_ expr_ targetSeed_ idx0_ idx1_ κ))
   (enc : encryptionScheme) (prg : prgScheme)
-  (HPrgSecure : prgSchemeSecure (fun {I Spec Output} => IsPolyTime) prg)
+  (HPrgSecure : prgSchemeSecure (fun {_ _ _} => IsPolyTime) prg)
   {shape : Shape} {e₁ e₂ : Expression shape} (H : PrgHopChain e₁ e₂) :
-  CompIndistinguishabilityDistr (fun {I Spec Output} => IsPolyTime)
+  CompIndistinguishabilityDistr (fun {_ _ _} => IsPolyTime)
     (famDistrLift (exprToFamDistr enc prg e₁))
     (famDistrLift (exprToFamDistr enc prg e₂)) := by
   induction H with
