@@ -3,6 +3,76 @@
 All notable changes to the proofs and code in this repository.
 Section numbers in brackets refer to [`PRGExtension-Analysis.md`](PRGExtension-Analysis.md).
 
+## [2026-09-16d] Atomicisation lemma; `GEval`; the obligation relocated
+
+Still `sorry`-free; all new results check with only `propext, Classical.choice, Quot.sound`.
+
+### Clarification — LM18 is not at fault
+
+Nothing found in this work contradicts LM18. The `keyRecovery`, reduction-lemma,
+`prgSchemeSecure` and `extractKeys_hideEncrypted_self` defects were all in the Lean
+extension. The `hidingSideCondition` failure is an *incompleteness of the formalization*:
+LM18 Lemma 3 has two cases — `Roots(Keys(e)) ⊆ 𝐊`, proved from IND-CPA, and the general
+case, reduced to it by a pseudorandom key renaming — and only the first was implemented.
+`scratch/GarbleSideCondition.lean` now confirms the general case is genuinely reached:
+at an intermediate fixpoint stage of `Garble andC (true,true)` the keys being hidden are
+`{K₅, G0 K₅, G1 K₅}` and `Roots(Keys(view))` is non-atomic, because `K₅` has itself been
+hidden away.
+
+### Added — the atomicisation lemma (LM18 Lemma 3, property 1), proved
+
+`SymbolicIndistinguishability.lean`:
+
+* `keySize_le_of_mem_keySubterms`, `G0_not_mem_keySubterms`, `G1_not_mem_keySubterms`,
+  `keySubterms_card` — a key chain has exactly `keySize k` distinct members;
+* `keySubterms_subset_of_mem_exprKeys`;
+* `prgClosure_eq_iterate`, `prgStep_iterate_extensive`, `prgStep_iterate_monotone`,
+  `prgStep_iterate_mono_exp`, `mem_iterate_of_strictYields`,
+  `mem_prgClosure_of_strictYields` — the bounded `prgClosure` really does reach a whole
+  chain (`keySize k ≤ |U|` because the chain sits inside the universe);
+* `rOf` — LM18's `r(e)` at a pattern;
+* **`hiddenKeys_atomic_of_atomicRoots`** — if `Roots(Keys(e)) ⊆ 𝐊` then every key of
+  `Keys(e)` that is *not* recovered is atomic, hence a legitimate IND-CPA target;
+* `AtomicRoots`, `atomicRoots_of_atomicKeys`.
+
+### Added — `PRGExtension/Garbling/Evaluation.lean`
+
+`extractPair`, `condSwap`, `xorVarB`, `extractPerm`, `decrypt`, `gEv`, `decode`, `GEval`,
+`parseGarbleOutput`, `GEvalExpr`, `testGarbleEval`, and `Theorem4` (LM18 correctness).
+`GEv(Dup, ε, (b,k)) = ((b, G0 k), (b, G1 k))` is the PRG case.
+
+`scratch/GarbleCorrectness.lean` checks `Theorem4` by `#eval` on *every* input of `notC`,
+`NAnd`, `andC` and `orC` — all pass. Three of those contain `Dup`, so the PRG path in both
+`Gb` and `GEv` is exercised; this is evidence that the two definitions are mutually
+consistent and faithful to LM18 §4.
+
+### Changed — the remaining obligation relocated
+
+**Removed** `AtomicisationBridge` and `symbolicToSemanticIndistinguishabilityOfBridge`.
+The bridge demanded the side condition at *every* fixpoint stage for one globally renamed
+expression, which nothing with PRG structure can satisfy — a vacuous hypothesis, the same
+defect as the `prgSchemeSecure` bug. Atomicisation must happen per step, not once.
+
+**Added** to `AdversaryView.lean`:
+
+* `FixpointStepSound` — soundness of one step of the greatest-fixpoint iteration;
+* `symbolicToSemanticIndistinguishabilityAdversaryViewOfStep`;
+
+and to `Soundness.lean`:
+
+* **`symbolicToSemanticIndistinguishabilityOfStep`** — full soundness, **no side
+  conditions**, from `FixpointStepSound` alone.
+
+`FixpointStepSound` is now the single outstanding obligation of the expression layer. Its
+docstring records the construction that should discharge it: pick a non-atomic root `k` of
+`Keys(v)`; because `k` is a root nothing in `Keys(v)` yields it, so its atomic bottom
+`VarK t` satisfies `VarK t ∉ exprKeys v` — exactly the hypothesis `PrgRenameRel.idealize`
+needs; the hop shortens every chain through `VarK t`, so iterating reaches atomic roots,
+where `hiddenKeys_atomic_of_atomicRoots` applies. What is missing is the termination and
+commutation bookkeeping.
+
+---
+
 ## [2026-09-16c] LM18 Lemma 2 proved; garbling module and Lemmas 4–8
 
 Still `sorry`-free; all new results check with only `propext, Classical.choice, Quot.sound`.

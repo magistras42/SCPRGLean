@@ -1101,6 +1101,212 @@ lemma seedFree_of_atomicKeys {s : Shape} {e : Expression s} (h : AtomicKeys e) (
   | G0 _ => simp [isAtomicKey] at hat
   | G1 _ => simp [isAtomicKey] at hat
 
+-- ===================================================================================
+-- Atomicisation: LM18 Lemma 3, property 1.
+--
+--   "If `Roots(Keys(e)) ⊆ 𝐊` then every key the hiding step removes is atomic."
+--
+-- A non-atomic `k ∈ Keys(e)` cannot be a root, so some `k' ∈ Keys(e)` satisfies `k' ≺ k`;
+-- that `k'` is caught by the ancestor clause of `keyRecovery`, and `k` lies in its PRG
+-- closure, so `k` is *recovered* rather than hidden.
+-- ===================================================================================
+
+lemma keySize_le_of_mem_keySubterms : ∀ (k x : Expression Shape.KeyS),
+    x ∈ keySubterms k → keySize x ≤ keySize k
+  | Expression.VarK n, x, hx => by
+      simp only [keySubterms, Finset.mem_singleton] at hx; subst hx; exact le_refl _
+  | Expression.G0 sd, x, hx => by
+      simp only [keySubterms, Finset.mem_union, Finset.mem_singleton] at hx
+      rcases hx with h | h
+      · subst h; exact le_refl _
+      · have := keySize_le_of_mem_keySubterms sd x h; simp only [keySize]; omega
+  | Expression.G1 sd, x, hx => by
+      simp only [keySubterms, Finset.mem_union, Finset.mem_singleton] at hx
+      rcases hx with h | h
+      · subst h; exact le_refl _
+      · have := keySize_le_of_mem_keySubterms sd x h; simp only [keySize]; omega
+
+lemma G0_not_mem_keySubterms (sd : Expression Shape.KeyS) :
+    Expression.G0 sd ∉ keySubterms sd := fun hc => by
+  have := keySize_le_of_mem_keySubterms sd _ hc; simp only [keySize] at this; omega
+
+lemma G1_not_mem_keySubterms (sd : Expression Shape.KeyS) :
+    Expression.G1 sd ∉ keySubterms sd := fun hc => by
+  have := keySize_le_of_mem_keySubterms sd _ hc; simp only [keySize] at this; omega
+
+/-- The chain of a key expression has exactly `keySize k` distinct members. -/
+lemma keySubterms_card : ∀ k : Expression Shape.KeyS, (keySubterms k).card = keySize k
+  | Expression.VarK n => by simp [keySubterms, keySize]
+  | Expression.G0 sd => by
+      have h : keySubterms (Expression.G0 sd) = insert (Expression.G0 sd) (keySubterms sd) := by
+        simp [keySubterms, Finset.insert_eq]
+      rw [h, Finset.card_insert_of_not_mem (G0_not_mem_keySubterms sd), keySubterms_card sd]
+      simp [keySize]
+  | Expression.G1 sd => by
+      have h : keySubterms (Expression.G1 sd) = insert (Expression.G1 sd) (keySubterms sd) := by
+        simp [keySubterms, Finset.insert_eq]
+      rw [h, Finset.card_insert_of_not_mem (G1_not_mem_keySubterms sd), keySubterms_card sd]
+      simp [keySize]
+
+/-- Every key *used* by an expression has its whole chain among the expression's subterms. -/
+lemma keySubterms_subset_of_mem_exprKeys {s : Shape} (e : Expression s) :
+    ∀ k ∈ exprKeys e, keySubterms k ⊆ keySubterms e := by
+  induction e with
+  | BitE b => intro k hk; simp [exprKeys] at hk
+  | Eps => intro k hk; simp [exprKeys] at hk
+  | VarK n => intro k hk; simp only [exprKeys, Finset.mem_singleton] at hk; subst hk; exact Finset.Subset.refl _
+  | G0 sd _ => intro k hk; simp only [exprKeys, Finset.mem_singleton] at hk; subst hk; exact Finset.Subset.refl _
+  | G1 sd _ => intro k hk; simp only [exprKeys, Finset.mem_singleton] at hk; subst hk; exact Finset.Subset.refl _
+  | Pair e1 e2 ih1 ih2 =>
+      intro k hk
+      simp only [exprKeys, Finset.mem_union] at hk
+      simp only [keySubterms]
+      rcases hk with h | h
+      · exact Finset.Subset.trans (ih1 k h) Finset.subset_union_left
+      · exact Finset.Subset.trans (ih2 k h) Finset.subset_union_right
+  | Perm b e1 e2 _ ih1 ih2 =>
+      intro k hk
+      simp only [exprKeys, Finset.mem_union] at hk
+      simp only [keySubterms]
+      rcases hk with h | h
+      · exact Finset.Subset.trans (ih1 k h) Finset.subset_union_left
+      · exact Finset.Subset.trans (ih2 k h) Finset.subset_union_right
+  | Enc k0 e0 ihk ihe =>
+      intro k hk
+      simp only [exprKeys, Finset.mem_union] at hk
+      simp only [keySubterms]
+      rcases hk with h | h
+      · exact Finset.Subset.trans (ihk k h) Finset.subset_union_left
+      · exact Finset.Subset.trans (ihe k h) Finset.subset_union_right
+  | Hidden k0 ihk =>
+      intro k hk
+      simp only [exprKeys] at hk
+      simp only [keySubterms]
+      exact ihk k hk
+
+-- --- the PRG closure reaches a whole chain -----------------------------------------
+
+lemma prgClosure_eq_iterate (U S : Finset (Expression Shape.KeyS)) :
+    prgClosure U S = (prgStep U)^[U.card + 1] S := by
+  simp only [prgClosure]
+  generalize U.card + 1 = n
+  induction n generalizing S with
+  | zero => simp
+  | succ m ih =>
+      rw [List.range_succ, List.foldl_append, ih, Function.iterate_succ_apply']
+      simp
+
+lemma prgStep_iterate_extensive (U S : Finset (Expression Shape.KeyS)) (n : ℕ) :
+    S ⊆ (prgStep U)^[n] S := by
+  induction n with
+  | zero => simp
+  | succ m ih =>
+      rw [Function.iterate_succ_apply']
+      exact Finset.Subset.trans ih (prgStep_extensive U _)
+
+lemma prgStep_iterate_monotone (U : Finset (Expression Shape.KeyS)) (n : ℕ)
+    {X Y : Finset (Expression Shape.KeyS)} (h : X ⊆ Y) :
+    (prgStep U)^[n] X ⊆ (prgStep U)^[n] Y := by
+  induction n generalizing X Y with
+  | zero => simpa using h
+  | succ m ih => rw [Function.iterate_succ_apply, Function.iterate_succ_apply]
+                 exact ih (prgStepMonotone U X Y h)
+
+lemma prgStep_iterate_mono_exp (U S : Finset (Expression Shape.KeyS)) {m n : ℕ} (h : m ≤ n) :
+    (prgStep U)^[m] S ⊆ (prgStep U)^[n] S := by
+  obtain ⟨d, rfl⟩ := Nat.exists_eq_add_of_le h
+  rw [Function.iterate_add_apply]
+  exact prgStep_iterate_monotone U m (prgStep_iterate_extensive U S d)
+
+/-- If `k' ≺ k` and `k'` is known, then `k` is reached in `keySize k` derivation steps. -/
+lemma mem_iterate_of_strictYields (U X : Finset (Expression Shape.KeyS)) :
+    ∀ (k k' : Expression Shape.KeyS), strictYields k' k = true → k' ∈ X →
+      (keySubterms k ⊆ U) → (k ∈ (prgStep U)^[keySize k] X)
+  | Expression.VarK n, k', h, _, _ => by simp [strictYields] at h
+  | Expression.G0 sd, k', h, hk', hU => by
+      have hmemU : Expression.G0 sd ∈ U := hU (by simp [keySubterms])
+      have hsdU : keySubterms sd ⊆ U :=
+        Finset.Subset.trans (by intro x hx; simp [keySubterms, hx]) hU
+      simp only [strictYields, Bool.or_eq_true, beq_iff_eq] at h
+      rw [show keySize (Expression.G0 sd) = keySize sd + 1 from by simp [keySize],
+        Function.iterate_succ_apply']
+      have hsd : sd ∈ (prgStep U)^[keySize sd] X := by
+        rcases h with h | h
+        · subst h; exact prgStep_iterate_extensive U X _ hk'
+        · exact mem_iterate_of_strictYields U X sd k' h hk' hsdU
+      simp only [prgStep, Finset.mem_union, Finset.mem_filter]
+      exact Or.inr ⟨hmemU, by simp [isDerived, hsd]⟩
+  | Expression.G1 sd, k', h, hk', hU => by
+      have hmemU : Expression.G1 sd ∈ U := hU (by simp [keySubterms])
+      have hsdU : keySubterms sd ⊆ U :=
+        Finset.Subset.trans (by intro x hx; simp [keySubterms, hx]) hU
+      simp only [strictYields, Bool.or_eq_true, beq_iff_eq] at h
+      rw [show keySize (Expression.G1 sd) = keySize sd + 1 from by simp [keySize],
+        Function.iterate_succ_apply']
+      have hsd : sd ∈ (prgStep U)^[keySize sd] X := by
+        rcases h with h | h
+        · subst h; exact prgStep_iterate_extensive U X _ hk'
+        · exact mem_iterate_of_strictYields U X sd k' h hk' hsdU
+      simp only [prgStep, Finset.mem_union, Finset.mem_filter]
+      exact Or.inr ⟨hmemU, by simp [isDerived, hsd]⟩
+
+lemma mem_prgClosure_of_strictYields {U X : Finset (Expression Shape.KeyS)}
+    {k k' : Expression Shape.KeyS} (h : strictYields k' k = true) (hk' : k' ∈ X)
+    (hU : (keySubterms k ⊆ U)) : (k ∈ prgClosure U X) := by
+  rw [prgClosure_eq_iterate]
+  refine prgStep_iterate_mono_exp U X ?_ (mem_iterate_of_strictYields U X k k' h hk' hU)
+  have : keySize k = (keySubterms k).card := (keySubterms_card k).symm
+  have hle : (keySubterms k).card ≤ U.card := Finset.card_le_card hU
+  omega
+
+/-- LM18 `r(e)` (Definition 3) evaluated at a pattern directly, i.e. `keyRecovery` at a
+    set large enough that nothing is hidden. -/
+def rOf {s : Shape} (e : Expression s) : Finset (Expression Shape.KeyS) :=
+  prgClosure (keySubterms e) (extractKeys e ∪ ancestorKeys (exprKeys e))
+
+/--
+  **LM18 Lemma 3, property 1 — the atomicisation lemma.**
+
+  If the *roots* of `Keys(e)` are atomic, then every key of `Keys(e)` that is not recovered
+  — i.e. every key the pattern function is about to hide behind — is itself atomic.
+
+  This is what makes the IND-CPA reduction applicable: `reductionHidingOneKey` can only
+  target a key *variable*, because the oracle's uniformly random key has to be identified
+  with one.  The hypothesis `Roots(Keys(e)) ⊆ 𝐊` is discharged in LM18 by a pseudorandom
+  key renaming (`PrgRenameRel` / `prgRename` here), which renames the roots to fresh atomic
+  keys; the conclusion is then inherited through the renaming.
+-/
+theorem hiddenKeys_atomic_of_atomicRoots {s : Shape} (e : Expression s)
+    (hroots : ∀ k ∈ rootsOf (exprKeys e), isAtomicKey k = true) :
+    ∀ k ∈ exprKeys e, k ∉ rOf e → isAtomicKey k = true := by
+  intro k hk hnr
+  by_contra hat
+  -- a non-atomic key cannot be a root of `Keys(e)` ...
+  have hnotroot : k ∉ rootsOf (exprKeys e) := fun hc => hat (hroots k hc)
+  -- ... so some `k' ∈ Keys(e)` strictly yields it
+  have hex : ∃ k' ∈ exprKeys e, strictYields k' k = true := by
+    by_contra hcon
+    push_neg at hcon
+    refine hnotroot (mem_rootsOf.mpr ⟨hk, fun k' hk' => ?_⟩)
+    cases hb : strictYields k' k
+    · rfl
+    · exact absurd hb (hcon k' hk')
+  obtain ⟨k', hk', hy⟩ := hex
+  -- that `k'` is exactly what the ancestor clause of `keyRecovery` collects ...
+  have hbase : k' ∈ extractKeys e ∪ ancestorKeys (exprKeys e) :=
+    Finset.mem_union_right _ (mem_ancestorKeys.mpr ⟨hk', k, hk, hy⟩)
+  -- ... and `k` lies in its PRG closure, so `k` is recovered.  Contradiction.
+  exact hnr (mem_prgClosure_of_strictYields hy hbase (keySubterms_subset_of_mem_exprKeys e k hk))
+
+/-- The hypothesis of the atomicisation lemma, named. -/
+def AtomicRoots {s : Shape} (e : Expression s) : Prop :=
+  ∀ k ∈ rootsOf (exprKeys e), isAtomicKey k = true
+
+/-- PRG-free expressions trivially have atomic roots. -/
+lemma atomicRoots_of_atomicKeys {s : Shape} {e : Expression s} (h : AtomicKeys e) :
+    AtomicRoots e :=
+  fun k hk => h k (exprKeys_subset_keySubterms e (rootsOf_subset _ hk))
+
 lemma keyRecoveryMonotone {s : Shape} (p : Expression s) (S1 S2 : Finset (Expression Shape.KeyS)) (h : S1 ⊆ S2) :
   keyRecovery p S1 ⊆ keyRecovery p S2 := by
   simp only [keyRecovery]

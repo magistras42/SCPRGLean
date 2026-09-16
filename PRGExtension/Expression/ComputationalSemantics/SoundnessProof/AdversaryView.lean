@@ -419,3 +419,74 @@ theorem symbolicToSemanticIndistinguishabilityAdversaryView
 --       apply Z
 --       )
 --   apply Z
+
+-- ===================================================================================
+-- Isolating the remaining obligation.
+-- ===================================================================================
+
+/--
+  Soundness of **one step** of the greatest-fixpoint iteration: going from the keys `z` to
+  the keys `keyRecovery e z` (which hides more) is undetectable.
+
+  This is the only thing the adversary-view argument needs.  The version proved above
+  discharges it from `hidingSideCondition`, which holds on the PRG-free fragment but
+  **not** for PRG garbled circuits (`scratch/GarbleSideCondition.lean`): at an intermediate
+  stage the keys being hidden include `G0 K₅`, `G1 K₅`, whose root `K₅` has itself been
+  hidden, so `Roots(Keys(view)) ⊄ 𝐊`.
+
+  That is precisely the situation LM18's Lemma 3 covers with its *general* case, and the
+  ingredients are now all present:
+
+  * `hiddenKeys_atomic_of_atomicRoots` — the atomic case: with `Roots(Keys(v)) ⊆ 𝐊`, every
+    key the step hides is atomic, hence a legitimate IND-CPA target;
+  * `prgRename` (LM18 Lemma 2) — the two renaming hops, which cost PRG security;
+  * `PrgRenameRel.idealize` with `replacePRG (VarK t) i j` — the renaming itself: pick a
+    non-atomic root `k` of `Keys(v)`, walk down its chain to its atomic bottom `VarK t`.
+    Because `k` is a root, nothing in `Keys(v)` yields it, so in particular
+    `VarK t ∉ exprKeys v` — exactly the side condition `idealize` requires.  The hop
+    shortens every chain through `VarK t` by one, so iterating terminates with atomic roots.
+
+  What is missing is the bookkeeping: that this iteration terminates, and that it commutes
+  with `hideEncrypted`/`keyRecovery` so the renaming carries the hidden view along.
+-/
+def FixpointStepSound (IsPolyTime : PolyFamOracleCompPred)
+    (enc : encryptionScheme) (prg : prgScheme) : Prop :=
+  ∀ {s : Shape} (e : Expression s) (z : Finset (Expression Shape.KeyS)),
+    (keyRecovery e z ⊆ z) →
+    CompIndistinguishabilityDistr IsPolyTime
+      (famDistrLift (exprToFamDistr enc prg (hideEncrypted z e)))
+      (famDistrLift (exprToFamDistr enc prg (hideEncrypted (keyRecovery e z) e)))
+
+/-- The adversary-view theorem needs nothing beyond one sound fixpoint step. -/
+theorem symbolicToSemanticIndistinguishabilityAdversaryViewOfStep
+  (IsPolyTime : PolyFamOracleCompPred)
+  (enc : encryptionScheme) (prg : prgScheme)
+  (Hstep : FixpointStepSound (fun {_ _ _} => IsPolyTime) enc prg)
+  {shape : Shape} (expr : Expression shape) :
+  CompIndistinguishabilityDistr (fun {_ _ _} => IsPolyTime)
+    (famDistrLift (exprToFamDistr enc prg expr))
+    (famDistrLift (exprToFamDistr enc prg (adversaryView expr))) := by
+  let R := fun (e1 e2 : Expression shape) => exprCompInd (fun {_ _ _} => IsPolyTime) enc prg e1 e2
+  have Z := fixaccess
+    (fun key => hideEncrypted key expr)
+    (keyRecovery expr)
+    (keyRecoveryMonotone expr)
+    expr
+    (keySubterms expr)
+    (keyRecoveryContained expr)
+    R
+    (by
+      intro e1 e2 e3 Ha Hb
+      simp only [R, exprCompInd] at *
+      apply indTrans (fun {I Spec Output} ↦ IsPolyTime)
+      · exact Ha
+      · exact Hb)
+    (by
+      intro z Hz
+      simp only [R, exprCompInd]
+      exact Hstep expr z Hz)
+    (by
+      simp [R, exprCompInd]
+      rw [hideEncrypted_keySubterms expr]
+      apply indRfl)
+  exact Z

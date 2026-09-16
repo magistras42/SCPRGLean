@@ -18,6 +18,7 @@ import PRGExtension.Expression.ComputationalSemantics.RenamePreserves
 -- PRG-based garbled circuits (LM18 §3-§5): definitions and the independence invariants.
 import PRGExtension.Garbling.Circuits
 import PRGExtension.Garbling.GarblingDef
+import PRGExtension.Garbling.Evaluation
 import PRGExtension.Garbling.Independence
 
 import VCVio2.ToMathlib.Control.MonadTransformer
