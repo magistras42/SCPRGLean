@@ -165,10 +165,23 @@ adversaryView e₁ = adversaryView e₂ = ⟨ G0(K₀), Hidden K₀ ⟩
 ```
 
 and `symIndistinguishable e₁ e₂` holds with the identity renaming. But the two distributions are
-**distinguishable** for a perfectly good IND-CPA scheme: let `enc'_k(m) = (enc_k(m), G0(k) ⊕ pad(m))`.
-`enc'` is IND-CPA (in the CPA game the adversary never sees `G0(k)`, which is pseudorandom), yet an
-adversary given `G0(K₀)` recovers `pad(m)` and reads the plaintext bit. Hence
+**distinguishable** for a perfectly good IND-CPA scheme. Take the textbook PRF-based scheme, keyed by
+the *first half of the PRG output* rather than by the key itself:
+
+```
+enc'_k(m) :  r ← {0,1}^κ ;  output (r, F_{G0(k)}(r) ⊕ m)
+```
+
+`enc'` is IND-CPA: `k` is uniform, so `G0(k)` is pseudorandom by PRG security, so `F_{G0(k)}` is a PRF,
+and `(r, F_K(r) ⊕ m)` under a PRF key is the standard CPA-secure construction. But anyone who is *given*
+`G0(k)` decrypts outright. So an adversary looking at `e₁`/`e₂` reads `G0(K₀)` off the first component
+and decrypts the second, recovering the plaintext bit. Hence
 `symbolicToSemanticIndistinguishability` as currently stated is false.
+
+(An earlier draft of this section used `enc'_k(m) = (enc_k(m), G0(k) ⊕ pad(m))`. That scheme is *not*
+IND-CPA — the mask `G0(k)` is the same in every ciphertext, so two chosen-plaintext queries reveal
+`pad(m_b) ⊕ pad(m'_b)` and hence `b`. The PRF version above repairs the witness; the conclusion is
+unchanged.)
 
 Under LM18's `r`, `Keys(⟨G0(K₀), ⦃𝔹⦄_{K₀}⟩) = {G0(K₀), K₀}` and `K₀ ≺ G0(K₀)`, so `K₀ ∈ r`, the fixpoint
 contains `K₀`, the ciphertext is *not* hidden, and the two patterns differ. Correct behaviour.

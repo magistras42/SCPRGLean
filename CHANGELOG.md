@@ -131,9 +131,19 @@ so it is an assumption to be discharged (LM18 Lemma 2 / Theorem 1), not a trivia
   it; `Soundness.lean` quantifies over `symIndistinguishable`. Putting a cryptographic
   game hop into the *symbolic* relation also destroys decidability-by-normalisation.
   `replacePRG` is **kept** — it is a genuine pseudorandom key renaming.
-* `axiom idealize_PRG_soundness` (`PrgSecurity.lean`). Dead, and it asserted as an axiom
-  precisely the theorem `symbolicToSemanticIndistinguishabilityPrgIdealization` is meant
-  to prove.
+* `axiom idealize_PRG_soundness` (`PrgSecurity.lean`). Three independent reasons:
+  1. **Duplicative** — its hypotheses and conclusion are literally those of
+     `symbolicToSemanticIndistinguishabilityPrgIdealization`, whose own docstring says
+     "Replaces `idealize_PRG_soundness` axiom". It asserted as an axiom the theorem the
+     development is meant to prove, so nothing is lost by dropping it.
+  2. **Dead** — the only occurrence outside its own declaration was in a comment.
+  3. **False under the definitions then in force** — with the pre-fix `keyRecovery`,
+     `e = ⟨G0(K₀), Enc K₀ (Bit true)⟩` gave `adversaryKeys e = {G0(K₀)}`, so the side
+     condition `targetSeed ∉ adversaryKeys e` held for `targetSeed = K₀`, yet the asserted
+     conclusion fails for the PRF-based IND-CPA scheme of §4.1. Unlike `sorry`, an `axiom`
+     produces no build warning, so a false one is invisible. (After the §4.1 fix the
+     ancestor clause puts `K₀` into `adversaryKeys e`, and this witness no longer satisfies
+     the hypothesis — checked by computation.)
 * `symbolicToSemanticIndistinguishabilityAdversaryView'` (`AdversaryView.lean`), an
   earlier copy of the theorem below it whose last step was `sorry`.
 * An unused `have Z := …` in the base case of the fixpoint argument.
