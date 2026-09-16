@@ -249,6 +249,26 @@ def evalExpr (enc : encryptionFunctions κ) (prg : prgFunctions κ) (kVars : ℕ
     let e' ← evalExpr enc prg kVars bVars e
     PMF.pure (prg.prg1 e')
 
+-- Evaluating a *key* expression is deterministic: `VarK` is a lookup and `G0`/`G1` are
+-- function applications, so the resulting `PMF` is a Dirac measure.  Recording this
+-- explicitly saves every downstream proof from pushing a monadic bind through a
+-- computation that has no randomness in it.
+def keyVal {κ : ℕ} (prg : prgFunctions κ) (kVars : ℕ -> BitVector κ) :
+    Expression Shape.KeyS → BitVector κ
+  | Expression.VarK n => kVars n
+  | Expression.G0 k => prg.prg0 (keyVal prg kVars k)
+  | Expression.G1 k => prg.prg1 (keyVal prg kVars k)
+
+-- (structural recursion rather than `induction`: the `Shape` index is fixed at `𝕂`)
+lemma evalExpr_key {κ : ℕ} (enc : encryptionFunctions κ) (prg : prgFunctions κ)
+    (kVars : ℕ -> BitVector κ) (bVars : ℕ -> Bool) :
+    (k : Expression Shape.KeyS) → evalExpr enc prg kVars bVars k = PMF.pure (keyVal prg kVars k)
+  | Expression.VarK n => by simp [evalExpr, keyVal]
+  | Expression.G0 k => by
+      simp [evalExpr, keyVal, evalExpr_key enc prg kVars bVars k, PMF.pure_bind, Bind.bind]
+  | Expression.G1 k => by
+      simp [evalExpr, keyVal, evalExpr_key enc prg kVars bVars k, PMF.pure_bind, Bind.bind]
+
 def extendFin {k : ℕ} (default : X) (x : Fin k -> X) :  (ℕ -> X) :=
   fun i =>
     if H : i<k then
@@ -654,6 +674,16 @@ def subst2 (i : ℕ) (val : X) (kVars : (ℕ -> X)) :=
     if x = i then val else kVars x
 
 
+-- Two-index substitution: the PRG reduction has to bind BOTH halves of the oracle's
+-- answer at once.
+def subst3 {X : Type} (i j : ℕ) (vi vj : X) (f : ℕ -> X) : ℕ -> X :=
+  fun x => if x = i then vi else if x = j then vj else f x
+
+lemma subst3_eq_subst2 {X : Type} (i j : ℕ) (vi vj : X) (f : ℕ -> X) :
+  subst3 i j vi vj f = subst2 i vi (subst2 j vj f) := by
+  funext x
+  simp only [subst3, subst2]
+
 def restrictInfToFin  (l : ℕ)  (f : ℕ -> S) : (Fin l -> S) :=
   fun i =>
     f i
@@ -682,6 +712,62 @@ lemma resampleIsTrivial2 {X: Type} [Fintype X] [Nonempty X] (ones : X):
   resampling2 n key₀ ones
    := by
     rw[resampling2EqResample, resampleIsTrivial]
+
+-- ---------------------------------------------------------------------------------
+-- Two-index resampling, mirroring `resample`/`resampling2`/`resampleIsTrivial2`.
+-- The PRG reduction binds both halves of the oracle answer, so it needs the
+-- two-variable version of "overwriting two coordinates with fresh uniform values
+-- leaves the uniform distribution alone".
+-- ---------------------------------------------------------------------------------
+
+noncomputable
+def resample3 {X: Type} [Fintype X] [Nonempty X] (n : ℕ) (i j : ℕ) : PMF (Fin n → X) :=
+  do
+  let x <- uniformOfFintype (Fin n -> X)
+  let y0 <- uniformOfFintype X
+  let y1 <- uniformOfFintype X
+  return subst i y0 (subst j y1 x)
+
+noncomputable
+def resampling3 {X: Type} [Fintype X] [Nonempty X] (n : ℕ) (i j : ℕ) (ones : X) : PMF (Fin n -> X) :=
+  do
+    let b <- uniformOfFintype (Fin n -> X)
+    let y0 <- uniformOfFintype X
+    let y1 <- uniformOfFintype X
+    return restrictInfToFin n (subst3 i j y0 y1 (extendFin ones b))
+
+lemma restrict_subst3 {X : Type} (n i j : ℕ) (y0 y1 ones : X) (b : Fin n -> X) :
+  restrictInfToFin n (subst3 i j y0 y1 (extendFin ones b)) = subst i y0 (subst j y1 b) := by
+  funext k
+  simp only [restrictInfToFin, subst3, subst, extendFin]
+  by_cases h0 : (k : ℕ) = i
+  · simp [h0, eq_comm]
+  · by_cases h1 : (k : ℕ) = j
+    · simp [h0, h1, eq_comm, Ne.symm h0]
+    · have hk : (k : ℕ) < n := k.isLt
+      simp [h0, h1, hk, Ne.symm h0, Ne.symm h1]
+
+lemma resampling3EqResample3 {X: Type} [Fintype X] [Nonempty X] {n i j : ℕ} (ones : X) :
+  resampling3 (X := X) n i j ones = resample3 (X := X) n i j := by
+  simp only [resampling3, resample3, restrict_subst3]
+
+lemma resample3IsTrivial {X: Type} [Fintype X] [Nonempty X] {n i j : ℕ} :
+  resample3 (X := X) n i j = uniformOfFintype (Fin n -> X) := by
+  -- swap the two fresh draws, fold the inner pair into `resample n j`, then `resample n i`
+  have h2 : resample3 (X := X) n i j
+      = (resample (X := X) n j) >>=
+        (fun z => uniformOfFintype X >>= fun y0 => PMF.pure (subst i y0 z)) := by
+    simp only [resample3, resample, Bind.bind, PMF.bind_bind, PMF.pure_bind]
+    congr 1
+    funext x
+    simp [PMF.pure_bind, Bind.bind, Pure.pure]
+    rw [PMF.bind_comm]
+  rw [h2, resampleIsTrivial]
+  exact resampleIsTrivial
+
+lemma resampleIsTrivial3 {X: Type} [Fintype X] [Nonempty X] {n i j : ℕ} (ones : X):
+  uniformOfFintype (Fin n -> X) = resampling3 n i j ones := by
+  rw [resampling3EqResample3, resample3IsTrivial]
 
 lemma cutAndExtend [Fintype X] [Nonempty X] (ones : X) (Seq : ℕ -> X) :
   agreeOnPrefix n Seq (extendFin ones (@restrictInfToFin X n Seq)) :=
@@ -762,6 +848,85 @@ lemma lifting (x : PMF X) (f : X -> PMF Y) :
       rw [@Bind.bind, Monad.toBind, OptionT.instMonad]
       simp [OptionT.bind, OptionT.mk]
 
+-- Two-index analogues of `evalCutAndExtend` / `veryBoring` / `resamplingLemma2`.
+lemma evalCutAndExtend3 {κ : ℕ} {enc : encryptionFunctions κ} {prg : prgFunctions κ} {s : Shape}
+    {e : Expression s} {i j : ℕ} {y0 y1 : BitVector κ} {a : Fin n → Bool} {b : Fin n → BitVector κ}
+    (n : ℕ) (H : n > getMaxVar e):
+  evalExpr enc prg (subst3 i j y0 y1 (extendFin ones b)) (extendFin false a) e =
+  evalExpr enc prg (extendFin ones (@restrictInfToFin _ n (subst3 i j y0 y1 (extendFin ones b)))) (extendFin false a) e :=
+by
+  apply evalNoMatter enc prg n
+  apply cutAndExtend
+  simp [agreeOnPrefix]
+  assumption
+
+lemma veryBoring3 {κ l : ℕ} {enc : encryptionFunctions κ} {prg : prgFunctions κ} {s : Shape}
+    {e : Expression s} {i j : ℕ}:
+  (do
+    let y0 ← PMF.uniformOfFintype (BitVector κ)
+    let y1 ← PMF.uniformOfFintype (BitVector κ)
+    let b ←  (PMF.uniformOfFintype (Fin l → Bool))
+    let c ←  (PMF.uniformOfFintype (Fin l → BitVector κ))
+    evalExpr enc prg (extendFin ones (restrictInfToFin l (subst3 i j y0 y1 (extendFin ones c)))) (extendFin false b) e
+  ) =
+  (do
+    let b ←  (PMF.uniformOfFintype (Fin l → Bool))
+    let c <- resampling3 l i j ones
+    evalExpr enc prg (extendFin ones c) (extendFin false b) e
+  ) := by
+  simp [resampling3]
+  simp [Bind.bind]
+  conv =>
+    lhs
+    arg 2
+    intro y0
+    rw [PMF.bind_comm]
+  conv =>
+    lhs
+    rw [PMF.bind_comm]
+  conv =>
+    lhs
+    arg 2
+    intro b
+    arg 2
+    intro y0
+    rw [PMF.bind_comm]
+  conv =>
+    lhs
+    arg 2
+    intro b
+    rw [PMF.bind_comm]
+
+lemma resamplingLemma3Prg {κ l : ℕ} {enc : encryptionFunctions κ} {prg : prgFunctions κ}
+    {s : Shape} {e : Expression s} (i j : ℕ) : (l > getMaxVar e) ->
+  (do
+    let y0 ← PMF.uniformOfFintype (BitVector κ)
+    let y1 ← PMF.uniformOfFintype (BitVector κ)
+    let a ←  (PMF.uniformOfFintype (Fin l → Bool))
+    let b ←  (PMF.uniformOfFintype (Fin l → BitVector κ))
+    evalExpr enc prg (subst3 i j y0 y1 (extendFin ones b)) (extendFin false a) e) =
+   (exprToDistr enc prg e)
+  := by
+  intro Hi
+  conv =>
+    lhs
+    arg 2
+    intro y0
+    arg 2
+    intro y1
+    arg 2
+    intro a
+    arg 2
+    intro b
+    rw [evalCutAndExtend3 l Hi]
+  rw [veryBoring3]
+  rw [<-resampleIsTrivial3 ones]
+  simp [exprToDistr]
+  rw [<-evalExprVarsNoMatter enc prg l (getMaxVar e + 1)]
+  · simp [evalExprVarsL]
+  · exact Hi
+  · apply Nat.le_refl
+
 lemma resamplingLemma {κ l : ℕ} {enc : encryptionScheme} {prg : prgScheme} {s : Shape} {e : Expression s} {key₀ : ℕ} : (l > getMaxVar e) ->
   (do
     let z : OptionT PMF _ := PMF.uniformOfFintype (BitVector κ)
@@ -776,5 +941,30 @@ lemma resamplingLemma {κ l : ℕ} {enc : encryptionScheme} {prg : prgScheme} {s
     rw [exprToFamDistr]
     rw [<-resamplingLemma2 key₀ H]
     simp [lifting]
+lemma resamplingLemmaPrg {κ l : ℕ} {enc : encryptionScheme} {prg : prgScheme} {s : Shape}
+    {e : Expression s} {i j : ℕ} : (l > getMaxVar e) ->
+  (do
+    let y0 ← (liftM (PMF.uniformOfFintype (BitVector κ)) : OptionT PMF _)
+    let y1 ← (liftM (PMF.uniformOfFintype (BitVector κ)) : OptionT PMF _)
+    let a ← liftM (PMF.uniformOfFintype (Fin l → Bool))
+    let b ← liftM (PMF.uniformOfFintype (Fin l → BitVector κ))
+    liftM (evalExpr (enc κ) (prg κ) (subst3 i j y0 y1 (extendFin ones b)) (extendFin false a) e)) =
+  liftM (exprToFamDistr enc prg e κ)
+  :=
+  by
+    intro H
+    rw [exprToFamDistr]
+    rw [<-resamplingLemma3Prg i j H]
+    rw [lifting]
+    congr
+    ext1 y0
+    rw [lifting]
+    congr
+    ext1 y1
+    rw [lifting]
+    congr
+    ext1 a
+    rw [lifting]
+
 
 end PRG

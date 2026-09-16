@@ -49,7 +49,12 @@ def prgIdealOracleImpl (κ : ℕ) (r : BitVector κ × BitVector κ) :
 noncomputable
 def seededPrgIdealOracle : famSeededOracle (fun κ ↦ oracleSpecPrg κ) := {
   Seed := fun κ => BitVector κ × BitVector κ
-  seedDistr := fun κ => PMF.uniformOfFintype (BitVector κ × BitVector κ)
+  -- written as two independent draws (rather than `uniformOfFintype` on the product) so
+  -- that it matches the shape of the reduction's own sampling; the distribution is the same
+  seedDistr := fun κ => do
+    let r0 ← PMF.uniformOfFintype (BitVector κ)
+    let r1 ← PMF.uniformOfFintype (BitVector κ)
+    PMF.pure (r0, r1)
   queryImpl := fun κ r => prgIdealOracleImpl κ r
 }
 
