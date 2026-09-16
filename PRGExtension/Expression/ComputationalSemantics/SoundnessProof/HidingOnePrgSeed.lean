@@ -270,4 +270,54 @@ theorem symbolicToSemanticIndistinguishabilityPrgIdealization
   apply IndistinguishabilityByReduction <;> try assumption
   apply Hreduction
 
+-- ===================================================================================
+-- LM18 Theorem 1, in the form the development needs: a finite sequence of idealisation
+-- steps, one internal node of the PRG tree at a time.
+-- ===================================================================================
+
+/--
+  A chain of PRG idealisation hops.  Each step carries its own side conditions, checked
+  against the *current* expression rather than the original -- which is what makes the
+  chain composable, and what makes the ordering of the PRG tree the caller's business.
+
+  To idealise a whole tree, order its internal nodes so that a node is only rewritten
+  once all of its ancestors have been: after an ancestor's hop the node's seed has become
+  a fresh atomic variable, so the `H_seed` condition of the next hop is available.
+-/
+inductive PrgHopChain {s : Shape} : Expression s → Expression s → Prop
+  | refl (e : Expression s) : PrgHopChain e e
+  | step {e₁ e₃ : Expression s} (t idx0 idx1 : ℕ)
+      (H_seed : Expression.VarK t ∉ exprKeys e₁)
+      (H_diff : idx0 ≠ idx1)
+      (H_fresh0 : Expression.VarK idx0 ∉ keySubterms e₁)
+      (H_fresh1 : Expression.VarK idx1 ∉ keySubterms e₁)
+      (rest : PrgHopChain (replacePRG (Expression.VarK t) idx0 idx1 e₁) e₃) :
+      PrgHopChain e₁ e₃
+
+/--
+  Soundness of a chain of hops: every `PrgHopChain` relates computationally
+  indistinguishable distributions.  This is LM18 Theorem 1 (⇒ direction) as used by the
+  soundness proof: a symbolically independent family of PRG-derived keys is
+  indistinguishable from a family of distinct atomic keys.
+-/
+theorem prgHopChainSound
+  (IsPolyTime : PolyFamOracleCompPred)
+  (HPolyTime : PolyTimeClosedUnderComposition (fun {I Spec Output} => IsPolyTime))
+  (Hreduction : ∀ (enc_ : encryptionScheme) (prg_ : prgScheme) (s_ : Shape)
+    (expr_ : Expression s_) (targetSeed_ : Expression Shape.KeyS) (idx0_ idx1_ : ℕ),
+    IsPolyTime (fun κ => reductionToPrgOracle enc_ prg_ expr_ targetSeed_ idx0_ idx1_ κ))
+  (enc : encryptionScheme) (prg : prgScheme)
+  (HPrgSecure : prgSchemeSecure (fun {I Spec Output} => IsPolyTime) prg)
+  {shape : Shape} {e₁ e₂ : Expression shape} (H : PrgHopChain e₁ e₂) :
+  CompIndistinguishabilityDistr (fun {I Spec Output} => IsPolyTime)
+    (famDistrLift (exprToFamDistr enc prg e₁))
+    (famDistrLift (exprToFamDistr enc prg e₂)) := by
+  induction H with
+  | refl e => apply indRfl
+  | step t idx0 idx1 H_seed H_diff H0 H1 _rest ih =>
+      apply indTrans
+      · exact symbolicToSemanticIndistinguishabilityPrgIdealization IsPolyTime HPolyTime
+          Hreduction enc prg HPrgSecure _ t idx0 idx1 H_seed H_diff H0 H1
+      · exact ih
+
 end PRG

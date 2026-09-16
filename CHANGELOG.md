@@ -3,6 +3,80 @@
 All notable changes to the proofs and code in this repository.
 Section numbers in brackets refer to [`PRGExtension-Analysis.md`](PRGExtension-Analysis.md).
 
+## [2026-09-16b] PRG reduction implemented; library is `sorry`-free
+
+`lake build` succeeds with **no `sorry` in `PRGExtension/`**.
+`#print axioms symbolicToSemanticIndistinguishability` reports only
+`propext, Classical.choice, Quot.sound` — no `sorryAx`, no custom axioms.
+
+### Fixed — the `Ras` step of the fixpoint argument [§4.5]
+
+`symbolicToSemanticIndistinguishabilityAdversaryView` proved
+`hide z expr ≈ hide (keyRecovery expr z) expr` via
+`H_ext_eq : extractKeys (hide K expr) = extractKeys (hide z expr)`, which is false, closed
+by the equally false `extractKeys_hideEncrypted_self`.
+
+Since `Hz : keyRecovery expr z ⊆ z`, moving from `z` to `K` hides exactly `z \ K`, and
+`extractKeys (hide z expr) ⊆ K`, so the step is **one** application of
+`symbolicToSemanticIndistinguishabilityHidingInner` with removal set
+`(z \ K) ∩ allParts (hide z expr)`. Added `hideSelectedRestrict` (restricting the removed
+set to `allParts` changes nothing) to justify the intersection, which keeps the removal set
+inside the expression so the side conditions apply.
+
+Removed `extractKeys_hideEncrypted_self` and `iterationOrFresh`.
+
+### Added — `reductionToPrgOracle` has a body, and the hop is proved [§4.7-1]
+
+`Def.lean`:
+* `keyVal` / `evalExpr_key` — evaluating a key expression is a Dirac `PMF` [§4.7-5].
+* `subst3`, `subst3_eq_subst2`.
+* Two-index resampling, mirroring the existing one-index chain: `resample3`,
+  `resampling3`, `restrict_subst3`, `resampling3EqResample3`, `resample3IsTrivial`,
+  `resampleIsTrivial3`, `evalCutAndExtend3`, `veryBoring3`, `resamplingLemma3Prg`,
+  `resamplingLemmaPrg`.
+
+`HidingOnePrgSeed.lean`:
+* `keyVal_replacePRG`, `evalExpr_replacePRG` — evaluating `replacePRG t i j e` with the
+  dummies bound to `(prg0 sd, prg1 sd)` equals evaluating `e` with `t` bound to `sd`.
+* `prgReductionVars` (+ the two bounds), `reductionToPrgOracle` with a real body.
+* `prgSimulateReal`, `prgSimulateIdeal`, then `reductionToPrgOracleRealEq` and
+  `reductionToPrgOracleIdealEq`.
+* `symbolicToSemanticIndistinguishabilityPrgIdealization` proved from
+  `IndistinguishabilityByReduction`.
+
+**Two hypothesis changes**, both forced by the reduction:
+* the side condition is now the syntactic `VarK t ∉ exprKeys expr` (§4.3 item 1), not the
+  unusable semantic `targetSeed ∉ adversaryKeys expr`;
+* the seed must be **atomic** — the real-world simulation identifies the oracle's uniform
+  seed with a key *variable*, which only works when the seed is one. A non-atomic seed
+  `G0(K)` has a pseudorandom, not uniform, value.
+
+`PrgSecurity.lean`: the ideal oracle's `seedDistr` is written as two independent draws
+rather than `uniformOfFintype` on the product, so it matches the reduction's own sampling
+shape (same distribution, no extra lemma needed).
+
+### Added — LM18 Theorem 1 as a composable chain [§5.3]
+
+`PrgHopChain` (inductive) and `prgHopChainSound`. Each hop carries its own side conditions
+checked against the *current* expression, so hops compose; `prgHopChainSound` discharges a
+whole chain by `indTrans` over the single-seed theorem. Ordering the PRG tree — rewrite a
+node only after all its ancestors, so its seed has already become a fresh atomic variable —
+is left to the caller, which is where the concrete circuit structure lives.
+
+### Added — LM18 §2.1 independence vocabulary [§5.3, §5.4]
+
+`SymbolicIndistinguishability.lean`: `keySize`, `strictYields_size`,
+`strictYields_irrefl`, `strictYields_trans`, `yields` (`⪯`), `IndependentKeys`,
+`descendantKeys` (`𝖦⁺(S) ∩ S`), `rootsOf` (`Roots`), `mem_descendantKeys`,
+`rootsOf_subset`, `mem_rootsOf`, `rootsOf_independent`, `independentKeys_iff_rootsOf`
+(LM18: `S` independent iff `S = Roots(S)`), and `ancestorKeys_eq_empty_iff` — the bridge
+showing the ancestor clause of `keyRecovery` fires on exactly the non-independent key sets.
+
+LM18 Lemmas 5–8, which the garbled-circuit proof is stated in terms of, can now be
+written down against this library.
+
+---
+
 ## [2026-09-16] Correctness fixes to the PRG extension
 
 `lake build` succeeds. `sorry` count: **9 declarations → 4**, and the two *false*

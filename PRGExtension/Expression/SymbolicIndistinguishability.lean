@@ -221,6 +221,108 @@ def strictYields (k : Expression Shape.KeyS) : Expression Shape.KeyS → Bool
   | Expression.G1 seed => (seed == k) || strictYields k seed
   | _ => false
 
+-- ===================================================================================
+-- LM18 §2.1 "Independence of pseudorandom keys": ⪯, ≺, independence, Roots.
+-- These are the notions LM18 Lemmas 5-8 (and hence the garbled-circuit proof) are
+-- stated in, so they live here rather than in the soundness proof.
+-- ===================================================================================
+
+def keySize : Expression Shape.KeyS → ℕ
+  | Expression.VarK _ => 1
+  | Expression.G0 k => keySize k + 1
+  | Expression.G1 k => keySize k + 1
+
+lemma strictYields_size : ∀ (k k' : Expression Shape.KeyS),
+    strictYields k k' = true → keySize k < keySize k'
+  | k, Expression.VarK n, h => by simp [strictYields] at h
+  | k, Expression.G0 sd, h => by
+      simp only [strictYields, Bool.or_eq_true, beq_iff_eq] at h
+      rcases h with h | h
+      · subst h; simp [keySize]
+      · have := strictYields_size k sd h; simp [keySize]; omega
+  | k, Expression.G1 sd, h => by
+      simp only [strictYields, Bool.or_eq_true, beq_iff_eq] at h
+      rcases h with h | h
+      · subst h; simp [keySize]
+      · have := strictYields_size k sd h; simp [keySize]; omega
+
+lemma strictYields_irrefl (k : Expression Shape.KeyS) : strictYields k k = false := by
+  cases hb : strictYields k k
+  · rfl
+  · exact absurd (strictYields_size k k hb) (by omega)
+
+lemma strictYields_trans (a b : Expression Shape.KeyS) (hab : strictYields a b = true) :
+    ∀ c : Expression Shape.KeyS, strictYields b c = true → strictYields a c = true
+  | Expression.VarK n, h => by simp [strictYields] at h
+  | Expression.G0 sd, h => by
+      simp only [strictYields, Bool.or_eq_true, beq_iff_eq] at h ⊢
+      rcases h with h | h
+      · subst h; exact Or.inr hab
+      · exact Or.inr (strictYields_trans a b hab sd h)
+  | Expression.G1 sd, h => by
+      simp only [strictYields, Bool.or_eq_true, beq_iff_eq] at h ⊢
+      rcases h with h | h
+      · subst h; exact Or.inr hab
+      · exact Or.inr (strictYields_trans a b hab sd h)
+
+/-- LM18 `k₁ ⪯ k₂`: `k₂ ∈ 𝖦*(k₁)`, i.e. `k₁` yields `k₂`. -/
+def yields (k1 k2 : Expression Shape.KeyS) : Prop := k1 = k2 ∨ strictYields k1 k2 = true
+
+/-- LM18: a set of keys is independent when no member yields another.  (Reflexivity is
+    free: `strictYields_irrefl`.) -/
+def IndependentKeys (S : Finset (Expression Shape.KeyS)) : Prop :=
+  ∀ k1 ∈ S, ∀ k2 ∈ S, strictYields k1 k2 = false
+
+/-- `𝖦⁺(S) ∩ S`: the members of `S` that are strict PRG-descendants of some member. -/
+def descendantKeys (S : Finset (Expression Shape.KeyS)) : Finset (Expression Shape.KeyS) :=
+  S.biUnion (fun k' => S.filter (fun k => strictYields k' k))
+
+/-- LM18 `Roots(S) = S ⧵ 𝖦⁺(S)`. -/
+def rootsOf (S : Finset (Expression Shape.KeyS)) : Finset (Expression Shape.KeyS) :=
+  S \ descendantKeys S
+
+lemma mem_descendantKeys {S : Finset (Expression Shape.KeyS)} {k : Expression Shape.KeyS} :
+  k ∈ descendantKeys S ↔ (k ∈ S ∧ ∃ k' ∈ S, strictYields k' k = true) := by
+  simp only [descendantKeys, Finset.mem_biUnion, Finset.mem_filter]
+  constructor
+  · rintro ⟨k', hk', hk, h⟩; exact ⟨hk, k', hk', h⟩
+  · rintro ⟨hk, k', hk', h⟩; exact ⟨k', hk', hk, h⟩
+
+lemma rootsOf_subset (S : Finset (Expression Shape.KeyS)) : rootsOf S ⊆ S :=
+  Finset.sdiff_subset
+
+lemma mem_rootsOf {S : Finset (Expression Shape.KeyS)} {k : Expression Shape.KeyS} :
+  k ∈ rootsOf S ↔ (k ∈ S ∧ ∀ k' ∈ S, strictYields k' k = false) := by
+  rw [rootsOf, Finset.mem_sdiff]
+  constructor
+  · rintro ⟨hk, hnd⟩
+    refine ⟨hk, fun k' hk' => ?_⟩
+    cases hb : strictYields k' k
+    · rfl
+    · exact absurd (mem_descendantKeys.mpr ⟨hk, k', hk', hb⟩) hnd
+  · rintro ⟨hk, h⟩
+    refine ⟨hk, fun hd => ?_⟩
+    obtain ⟨_, k', hk', hy⟩ := mem_descendantKeys.mp hd
+    rw [h k' hk'] at hy
+    exact Bool.noConfusion hy
+
+/-- LM18: `Roots(S)` is always an independent set. -/
+lemma rootsOf_independent (S : Finset (Expression Shape.KeyS)) : IndependentKeys (rootsOf S) := by
+  intro k1 hk1 k2 hk2
+  exact (mem_rootsOf.mp hk2).2 k1 (rootsOf_subset S hk1)
+
+/-- LM18: `S` is independent iff `S = Roots(S)`. -/
+lemma independentKeys_iff_rootsOf (S : Finset (Expression Shape.KeyS)) :
+  IndependentKeys S ↔ rootsOf S = S := by
+  constructor
+  · intro h
+    apply Finset.Subset.antisymm (rootsOf_subset S)
+    intro k hk
+    exact mem_rootsOf.mpr ⟨hk, fun k' hk' => h k' hk' k hk⟩
+  · intro h k1 hk1 k2 hk2
+    rw [← h] at hk2
+    exact (mem_rootsOf.mp hk2).2 k1 hk1
+
 -- If `k` is not a strict PRG-ancestor of the key expression `e`, and is not `e` itself,
 -- then `k` does not occur anywhere in `e`'s seed chain.
 lemma strictYields_keySubterms : ∀ (k e : Expression Shape.KeyS),
@@ -323,6 +425,22 @@ lemma ancestorKeysMonotone {K1 K2 : Finset (Expression Shape.KeyS)} (h : K1 ⊆ 
   intro k hk
   obtain ⟨hkK, k', hk', hyield⟩ := mem_ancestorKeys.mp hk
   exact mem_ancestorKeys.mpr ⟨h hkK, k', h hk', hyield⟩
+
+/-- The bridge between LM18's independence and the ancestor clause of `keyRecovery`:
+    the clause fires on exactly the non-independent key sets. -/
+lemma ancestorKeys_eq_empty_iff (K : Finset (Expression Shape.KeyS)) :
+  ancestorKeys K = ∅ ↔ IndependentKeys K := by
+  constructor
+  · intro h k1 hk1 k2 hk2
+    cases hb : strictYields k1 k2
+    · rfl
+    · exact absurd (mem_ancestorKeys.mpr ⟨hk1, k2, hk2, hb⟩) (by simp [h])
+  · intro h
+    apply Finset.eq_empty_of_forall_not_mem
+    intro k hk
+    obtain ⟨hkK, k', hk', hy⟩ := mem_ancestorKeys.mp hk
+    rw [h k hkK k' hk'] at hy
+    exact Bool.noConfusion hy
 
 -- Next, we define the 'key recovery operator (𝓕ₑ from the paper), that given a set of keys,
 -- hides the encrypted parts of the expression and computes the recoverable keys of the result.
