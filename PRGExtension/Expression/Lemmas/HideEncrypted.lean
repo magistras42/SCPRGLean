@@ -146,6 +146,18 @@ lemma hideEncryptedUniv {s : Shape} (keys : Set (Expression Shape.KeyS)) (p : Ex
   rw [hideEncryptedUnivAux keys (allParts p) p]
   tauto
 
+-- Restricting the *removed* set to the parts of the expression changes nothing, because
+-- `hideEncryptedS` only ever tests membership of keys that actually occur in `p`.
+lemma hideSelectedRestrict {s : Shape} (S : Set (Expression Shape.KeyS)) (p : Expression s) :
+  hideSelectedS (S ∩ ↑(allParts p)) p = hideSelectedS S p := by
+  simp only [hideSelectedS]
+  rw [← hideEncryptedUniv (S ∩ ↑(allParts p))ᶜ p, ← hideEncryptedUniv Sᶜ p]
+  congr 1
+  ext x
+  simp only [Set.mem_inter_iff, Set.mem_compl_iff, Set.mem_inter_iff, not_and]
+  tauto
+
+
 lemma hideKeysUniv {s : Shape} (keys : Finset (Expression Shape.KeyS)) (p : Expression s):
   hideSelectedS (allParts p \ keys) p = hideEncrypted (keys) p := by
     simp [hideSelectedS]

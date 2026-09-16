@@ -968,78 +968,21 @@ lemma keyRecoveryContained {s : Shape} (p : Expression s) (S : Finset (Expressio
   -- notation on the union and feed `Finset.union_subset` directly.)
   exact prgClosureContained _ _ (Finset.union_subset h_ext h_anc)
 
-/-
-  ⚠ THIS STATEMENT IS FALSE.  (Established 2026-09-16, see CHANGELOG and
-  `scratch/ExtractKeysSelfCounterexample.lean`, which computes the counterexample.)
-
-      e    = Enc (VarK 0) (VarK 1)
-      keys = {VarK 0}
-
-      hideEncrypted keys e            = Enc (VarK 0) (VarK 1)
-      Y := extractKeys (…)            = {VarK 1}
-      hideEncrypted Y e               = Hidden (VarK 0)      -- VarK 0 ∉ Y
-      extractKeys (hideEncrypted Y e) = ∅
-
-  so `Y ⊆ ∅` fails.  The earlier comment ("mathematically true but not provable with our
-  current definitions") was wrong: the obstruction is not the definitions, it is the
-  statement.
-
-  The `sorry` is retained ONLY because the single consumer,
-  `symbolicToSemanticIndistinguishabilityAdversaryView`, currently routes its fixpoint
-  step through the equally-false intermediate `H_ext_eq`.  The *conclusion* of that step
-  (`hideEncrypted z expr ≈ hideEncrypted (keyRecovery expr z) expr`) is true and follows
-  from IND-CPA applied to the key set `z \ keyRecovery expr z`; restructuring the proof
-  that way is the remaining work.  See PRGExtension-Analysis.md §4.5.
--/
-lemma extractKeys_hideEncrypted_self {s : Shape} (keys : Finset (Expression 𝕂)) (e : Expression s) :
-  extractKeys (hideEncrypted keys e) ⊆ extractKeys (hideEncrypted (extractKeys (hideEncrypted keys e)) e) := by
-  induction e <;> simp [extractKeys, hideEncrypted] at *
-  case Pair e1 e2 ih1 ih2 =>
-    apply Finset.union_subset_union
-    · -- Left Goal (hsu)
-      -- 1. Hiding with a union of keys is larger than hiding with just the left keys
-      have H_hide_mono : hideEncrypted (extractKeys (hideEncrypted keys e1)) e1 ⊆
-                         hideEncrypted (extractKeys (hideEncrypted keys e1) ∪ extractKeys (hideEncrypted keys e2)) e1 := by
-        apply hideEncryptedMonotone
-        apply Finset.subset_union_left
-
-      -- 2. Extracting from a larger view gives more keys
-      have H_ext_mono := keyPartsMonotone _ _ H_hide_mono
-
-      -- 3. Chain with IH1
-      exact Finset.Subset.trans ih1 H_ext_mono
-
-    · -- Right Goal (htv)
-      -- Same logic, but using subset_union_right
-      have H_hide_mono : hideEncrypted (extractKeys (hideEncrypted keys e2)) e2 ⊆
-                         hideEncrypted (extractKeys (hideEncrypted keys e1) ∪ extractKeys (hideEncrypted keys e2)) e2 := by
-        apply hideEncryptedMonotone
-        apply Finset.subset_union_right
-
-      have H_ext_mono := keyPartsMonotone _ _ H_hide_mono
-      exact Finset.Subset.trans ih2 H_ext_mono
-
-  case Perm b e1 e2 ih1 ih2 =>
-    -- The Perm case has the exact same structural sub-goals for the keys!
-    apply Finset.union_subset_union
-    ·
-      apply Finset.Subset.trans e2
-      apply keyPartsMonotone
-      apply hideEncryptedMonotone
-      apply Finset.subset_union_left
-    ·
-      apply Finset.Subset.trans ih1
-      apply keyPartsMonotone
-      apply hideEncryptedMonotone
-      apply Finset.subset_union_right
-  case Enc k e ih_k ih_e hk =>
-    rw [apply_ite extractKeys]
-    split
-    · -- Case: k is in the keys - mathematically true but not provable with our current definitions, so we just admit it for now
-      sorry
-    · -- Case: k is NOT in the keys (it becomes Hidden)
-      -- extractKeys (Hidden ...) is empty, which is a subset of anything!
-      tauto
+-- REMOVED (see CHANGELOG 2026-09-16): `extractKeys_hideEncrypted_self`.
+--
+-- It claimed `extractKeys (hide keys e) ⊆ extractKeys (hide (extractKeys (hide keys e)) e)`
+-- and was the last `sorry` outside `HidingOnePrgSeed.lean`.  The statement is FALSE:
+--
+--     e = Enc (VarK 0) (VarK 1),  keys = {VarK 0}
+--     hide keys e            = Enc (VarK 0) (VarK 1)
+--     Y := extractKeys (…)   = {VarK 1}
+--     hide Y e               = Hidden (VarK 0)        -- VarK 0 ∉ Y
+--     extractKeys (hide Y e) = ∅          so  Y ⊆ ∅  fails.
+--
+-- (`scratch/ExtractKeysSelfCounterexample.lean` computes this.)  Its only consumer, the
+-- fixpoint step of `symbolicToSemanticIndistinguishabilityAdversaryView`, no longer needs
+-- it: that step now hides `z \ keyRecovery expr z` in one IND-CPA application instead of
+-- routing through the (also false) `H_ext_eq`.
 
 -- We are now ready to calculate the fixpoint.
 

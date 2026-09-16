@@ -251,16 +251,7 @@ by
 def exprCompInd (IsPolyTime : PolyFamOracleCompPred) (enc : encryptionScheme) (prg : prgScheme) {shape : Shape} (expr1 expr2 : Expression shape) :=
   CompIndistinguishabilityDistr IsPolyTime (famDistrLift (exprToFamDistr enc prg expr1)) (famDistrLift (exprToFamDistr enc prg expr2))
 
-lemma iterationOrFresh {z : Finset (Expression Shape.KeyS)} (expr : Expression s):
-  (extractKeys (hideEncrypted z expr) ⊆ z) ->
-  hideEncrypted (extractKeys (hideEncrypted z expr)) (hideEncrypted z expr) =
-  hideEncrypted (extractKeys (hideEncrypted z expr)) expr :=
-  by
-    apply twoHiding
-
--- REMOVED (see CHANGELOG 2026-09-16): `symbolicToSemanticIndistinguishabilityAdversaryView'`,
--- an earlier copy of the theorem below whose final step was left as `sorry`.  The
--- unprimed version supersedes it and is complete.
+-- REMOVED (2026-09-16): `iterationOrFresh`, used only by the old fixpoint step.
 
 theorem symbolicToSemanticIndistinguishabilityAdversaryView
   (IsPolyTime : PolyFamOracleCompPred)
@@ -301,88 +292,62 @@ theorem symbolicToSemanticIndistinguishabilityAdversaryView
     -- Single-Step Fixpoint Hiding (Ras)
     (by
       intro z Hz
-      simp [R, exprCompInd]
-      -- Apply semantic hiding to the current expression
-      have Z := symbolicToSemanticIndistinguishabilityHiding IsPolyTime HPolyTime Hreduction HreductionPrg enc prg HEncIndCpa HPrgSecure (hideEncrypted z expr) (Hatomic z)
-      simp [expressionRecovery] at Z
-
-      -- Extracting from z-hidden expr is a subset of extracting from PRG-hidden expr
-      have H_monotone : extractKeys (hideEncrypted z expr) ⊆ extractKeys (hideEncrypted (prgClosure (keySubterms expr) z) expr) := by
+      -- `Hz : keyRecovery expr z ⊆ z`, so moving from `z` to `K := keyRecovery expr z`
+      -- HIDES the keys of `z \ K`.  None of those is extractable from the z-view, so this
+      -- is exactly one application of the IND-CPA hiding theorem.
+      --
+      -- The earlier route went through
+      --   `H_ext_eq : extractKeys (hide K expr) = extractKeys (hide z expr)`,
+      -- which is FALSE (counterexample: `expr = Enc (VarK 0) (VarK 1)`, `z = {VarK 0, VarK 1}`
+      -- gives `K = {VarK 1}`, `hide K expr = Hidden (VarK 0)`, so `∅ = {VarK 1}`), and it
+      -- was only closed by the equally false `extractKeys_hideEncrypted_self`.
+      -- See CHANGELOG 2026-09-16 / PRGExtension-Analysis.md §4.5.
+      simp only [R, exprCompInd]
+      have H_monotone : extractKeys (hideEncrypted z expr) ⊆
+          extractKeys (hideEncrypted (prgClosure (keySubterms expr) z) expr) := by
         apply keyPartsMonotone
         apply hideEncryptedMonotone
         apply subset_prgClosure
-
-      -- Bridge the extraction to the full PRG recovery
       have H_extract_sub_recovery : extractKeys (hideEncrypted z expr) ⊆ keyRecovery expr z := by
         apply Finset.Subset.trans H_monotone
-        -- `keyRecovery` now recovers `extractKeys view ∪ ancestorKeys (exprKeys view)`
-        -- (LM18 Def. 3), so we pass through the left injection of the union first.
         exact Finset.Subset.trans Finset.subset_union_left (subset_prgClosure _ _)
 
-      -- Prove the subset required by iterationOrFresh
-      have Hsubset : extractKeys (hideEncrypted z expr) ⊆ z := by
-        apply Finset.Subset.trans H_extract_sub_recovery Hz
+      -- The keys we are about to hide.  Intersecting with `allParts` keeps the set inside
+      -- the expression (so the side conditions apply) without changing the result.
+      have Hdisj : extractKeys (hideEncrypted z expr) ∩
+          ((z \ keyRecovery expr z) ∩ allParts (hideEncrypted z expr)) = ∅ := by
+        apply Finset.eq_empty_of_forall_not_mem
+        intro x hx
+        rw [Finset.mem_inter, Finset.mem_inter, Finset.mem_sdiff] at hx
+        exact hx.2.1.2 (H_extract_sub_recovery hx.1)
 
-      -- Apply transitivity WITHOUT explicit parameters to avoid I✝ errors
-      apply indTrans
+      -- Hiding `z \ K` on top of the z-view is the same as hiding with `K` directly.
+      have Hrw : hideSelectedS (↑((z \ keyRecovery expr z) ∩ allParts (hideEncrypted z expr)))
+          (hideEncrypted z expr) = hideEncrypted (keyRecovery expr z) expr := by
+        rw [Finset.coe_inter, hideSelectedRestrict]
+        simp only [hideSelectedS]
+        rw [← hideEncryptedEqS (keyRecovery expr z) expr]
+        rw [← hideEncryptedEqS z expr, twoHideEncryptedS]
+        congr 1
+        ext x
+        simp only [Set.mem_inter_iff, Set.mem_compl_iff, Finset.mem_coe, Finset.mem_sdiff,
+          not_and, not_not]
+        exact ⟨fun h => h.1 h.2, fun h => ⟨fun _ => h, Hz h⟩⟩
 
-      · -- Goal 1: LHS ≈ ?distr2
-        exact Z
-
-      · -- Goal 2: ?distr2 ≈ RHS
-        -- (nested hide) ≈ (keyRecovery hide)
-        have Heq : hideEncrypted (extractKeys (hideEncrypted z expr)) (hideEncrypted z expr) = hideEncrypted (extractKeys (hideEncrypted z expr)) expr := iterationOrFresh expr Hsubset
-        rw [Heq]
-
-        -- The goal is now: (un-nested hide) ≈ (keyRecovery hide)
-
-        -- To clear the sorry safely (without timeouts), we build the RHS proof:
-        let RHS_view := hideEncrypted (keyRecovery expr z) expr
-        have Z_RHS := symbolicToSemanticIndistinguishabilityHiding IsPolyTime HPolyTime Hreduction HreductionPrg enc prg HEncIndCpa HPrgSecure RHS_view (Hatomic (keyRecovery expr z))
-        simp [expressionRecovery] at Z_RHS
-
-        --- 1. Equate the un-nesting for the RHS
-        have Heq_RHS : hideEncrypted (extractKeys (hideEncrypted z expr)) RHS_view =
-           hideEncrypted (extractKeys (hideEncrypted z expr)) expr :=
-          twoHiding expr H_extract_sub_recovery
-
-        -- 2. Equate the extraction sets
-        have H_ext_eq : extractKeys RHS_view = extractKeys (hideEncrypted z expr) := by
-          apply Finset.Subset.antisymm
-
-          · -- Forward Direction: Since keyRecovery(z) ⊆ z (Hz), hiding the recovery
-            -- is smaller than hiding z, so it extracts fewer keys.
-            apply keyPartsMonotone
-            apply hideEncryptedMonotone
-            exact Hz
-
-          · -- Reverse Direction: The extracted keys never shrink below the minimal view.
-            -- 2. Hiding is monotone: Because y ⊆ K, hiding with y results in a smaller view than hiding with K.
-            have H_view_inc : hideEncrypted (extractKeys (hideEncrypted z expr)) expr ⊆ hideEncrypted (keyRecovery expr z) expr := by
-              apply hideEncryptedMonotone
-              exact H_extract_sub_recovery
-
-            -- 3. Extracting is monotone: Since the y-view is smaller than the K-view (RHS_view),
-            -- it extracts fewer keys.
-            have H_ext_inc : extractKeys (hideEncrypted (extractKeys (hideEncrypted z expr)) expr) ⊆ extractKeys RHS_view := by
-              apply keyPartsMonotone
-              exact H_view_inc
-
-            -- 4. The Self-Extraction Property: Extracting keys from a y-view gives at least y.
-            -- This is the missing link that cannot be bypassed.
-            have H_y_sub_ext_y : extractKeys (hideEncrypted z expr) ⊆ extractKeys (hideEncrypted (extractKeys (hideEncrypted z expr)) expr) := by
-              apply extractKeys_hideEncrypted_self -- Replace this sorry with your library's idempotence/self-extraction lemma
-
-            -- 5. Chain the inclusions: y ⊆ extractKeys(y-view) ⊆ extractKeys(K-view)
-            exact Finset.Subset.trans H_y_sub_ext_y H_ext_inc
-
-        -- 3. Rewrite Z_RHS using our two structural proofs
-        rw [H_ext_eq] at Z_RHS
-        rw [Heq_RHS] at Z_RHS
-
-        -- Z_RHS now proves: (keyRecovery hide) ≈ (un-nested hide)
-        -- Our goal is: (un-nested hide) ≈ (keyRecovery hide)
-        exact indSym Z_RHS
+      have Zstep := symbolicToSemanticIndistinguishabilityHidingInner
+        ((z \ keyRecovery expr z) ∩ allParts (hideEncrypted z expr))
+        IsPolyTime HPolyTime Hreduction HreductionPrg enc prg HEncIndCpa HPrgSecure
+        (hideEncrypted z expr) Hdisj
+        (fun k hk => (Hatomic z).1 k (by
+          rw [Finset.mem_sdiff]
+          rw [Finset.mem_inter, Finset.mem_sdiff] at hk
+          refine ⟨hk.2, fun hc => hk.1.2 (H_extract_sub_recovery hc)⟩))
+        (fun n hn => (Hatomic z).2 n (by
+          rw [Finset.mem_sdiff]
+          rw [Finset.mem_inter, Finset.mem_sdiff] at hn
+          refine ⟨hn.2, fun hc => hn.1.2 (H_extract_sub_recovery hc)⟩))
+      rw [Hrw] at Zstep
+      exact Zstep
     )
     -- Base Case Initialization (Rsup)
     (by
