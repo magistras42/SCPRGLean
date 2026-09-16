@@ -3,10 +3,13 @@
 *Analysis of `PRGExtension/` against `SymbolicGarbledCircuitsInLean/` (the unmodified DFMS framework) and
 against Li–Micciancio, "Symbolic security of garbled circuits", CSF 2018 (`prg.pdf`, cited below as **LM18**).*
 
-> **Implementation status (2026-09-16).** §4.1, §4.2, §4.3 and §4.4 have been implemented;
-> §4.5 turned out to be *wrong* and is rewritten below. See [`CHANGELOG.md`](CHANGELOG.md)
-> for the per-file record. `sorry`-carrying declarations: 9 → 4. The analysis below is kept
-> in its original diagnostic form, with a **STATUS** line added to each item.
+> **Implementation status (2026-09-16).** §4.1–§4.5 and §4.7 items 1 and 5 are implemented,
+> and the single-seed PRG hop of §5.3 is proved. **`PRGExtension/` is now `sorry`-free**, and
+> `#print axioms symbolicToSemanticIndistinguishability` reports only `propext`,
+> `Classical.choice`, `Quot.sound`. §4.5 turned out to be a *false statement* rather than an
+> open one and is rewritten below. See [`CHANGELOG.md`](CHANGELOG.md) for the per-file
+> record. `sorry`-carrying declarations: 9 → 0. The analysis below is kept in its original
+> diagnostic form, with a **STATUS** line added to each item.
 
 Build status as originally written: `lake build` **succeeds** (exit 0) with `sorry` warnings in 9 declarations
 across 4 files. Nothing is broken syntactically; the problems are semantic.
@@ -97,12 +100,8 @@ AdversaryView.lean:171-245 (12 occurrences)  the G0/G1 branches of HidingInner
 AdversaryView.lean:350                       dead: in the superseded `…AdversaryView'`
 ```
 
-**After the 2026-09-16 changes**, only two remain:
-
-```
-SymbolicIndistinguishability.lean   extractKeys_hideEncrypted_self  -- statement is FALSE, see §4.5
-HidingOnePrgSeed.lean ×4            reduction body + both worlds + final hop
-```
+**After the 2026-09-16 changes, none remain.** Every item above is either proved or was
+removed as a false statement (§4.5).
 
 Note that `HidingOneKey.lean` also contains two **complete, `sorry`-free** lemmas,
 `reductionToOracleSimulateEq'` ([:288](PRGExtension/Expression/ComputationalSemantics/SoundnessProof/HidingOneKey.lean#L288))
@@ -381,7 +380,10 @@ regression test that the definition has teeth.
 
 ### 4.5 (P0-d) `extractKeys_hideEncrypted_self` is FALSE — and so is the step that uses it
 
-**STATUS: CORRECTED DIAGNOSIS — now the highest-priority open item.**
+**STATUS: FIXED.** The lemma and its consumer's `H_ext_eq` are gone; the fixpoint step is
+now one application of the hiding theorem with removal set `z \ keyRecovery expr z`
+(restricted to `allParts`, via the new `hideSelectedRestrict`), exactly as proposed at the
+end of this section.
 
 This section originally called the lemma "the one legitimately open lemma", accepted the
 in-source comment that it was "mathematically true but not provable with our current
@@ -450,6 +452,9 @@ as such in the source. Nothing else in the library depends on it.
 ---
 
 ### 4.7 Unspecified or unproven details in the computational model
+
+**STATUS: items 1 and 5 fixed; 2 and 3 superseded by `PrgHopChain`; 6 and 7 partly
+addressed (vocabulary added, renaming still atomic-only); 4, 8 and 9 still open.**
 
 Beyond the three defects above, the computational side of the PRG extension has gaps that will block proofs
 as soon as they are attempted. In rough order of how much they hurt:
@@ -530,7 +535,24 @@ Listed in dependency order. Items marked ★ are new mathematics, not present in
 | `symbolicToSemanticIndistinguishabilityHidingOneKey` | mechanical once the above land |
 | polynomial-time accounting for `reductionToOracle` over `G0`/`G1` | the prose proof at the end of the file was **not updated** for the PRG case; add the `Expression.G0/G1` cases (one `prg0` call, output length κ — trivially polynomial) so the `Hreduction` axiom stays justified |
 
-### 5.3 ★ Layer 3 — PRG independence (the hop exists; the induction does not)
+### 5.3 ★ Layer 3 — PRG independence
+
+**STATUS: the single-seed hop is proved, and `PrgHopChain`/`prgHopChainSound` compose hops
+into a finite sequence — this is LM18 Theorem 1 (⇒) in the form the soundness proof uses.
+What remains is LM18 Lemma 2 (general `𝖦`-preserving renamings), which would discharge
+`hidingSideCondition`.**
+
+> **How Lemma 2 now decomposes.** `⟦e⟧ ≈ ⟦α_K(e)⟧` for a pseudorandom key renaming `α_K`
+> follows from three pieces that are now all in place or clearly delimited:
+> 1. a `PrgHopChain` idealising every internal PRG node of `e`, ending in an expression
+>    whose keys are all atomic (`prgHopChainSound` gives `⟦e⟧ ≈ ⟦e°⟧`);
+> 2. the same for `α_K(e)`, giving `⟦α_K(e)⟧ ≈ ⟦α_K(e)°⟧`;
+> 3. `e°` and `α_K(e)°` differ only by a **bijection of atomic key indices**, so
+>    `applyRenamePreservesCompSem2` — which is an *exact equality* and already proved —
+>    finishes it.
+> The remaining work is entirely (1)/(2): constructing the chain for a given expression,
+> i.e. ordering the PRG tree and discharging each hop's freshness bookkeeping. No new
+> cryptographic content is needed.
 
 This is where PRG security is actually consumed. `PrgSecurity.lean` and `HidingOnePrgSeed.lean` already
 provide the *single-seed* hop that this layer is built from; what is missing is the induction that lifts one
@@ -603,9 +625,10 @@ Lemmas 5–8 (strong independence of label expressions is preserved by `Gb`) and
 
 ## 6. Recommended order of work
 
-> Steps 1–7 were carried out on 2026-09-16 (see [`CHANGELOG.md`](CHANGELOG.md)),
-> except that step 7 revealed §4.5 to be a false statement rather than an open one.
-> The updated queue is: **§4.5 first**, then steps 8–11.
+> Steps 1–9 were carried out on 2026-09-16 (see [`CHANGELOG.md`](CHANGELOG.md)); step 7
+> revealed §4.5 to be a false statement rather than an open one, and was resolved by
+> re-deriving the fixpoint step instead. The library is `sorry`-free. **Remaining: step 10
+> (LM18 Lemma 2 — see the box in §5.3 for how it now decomposes) and step 11 (Garbling).**
 
 1. **Fix `prgSchemeSecure`** (§4.4). Ten minutes, and it stops you from proving vacuous theorems.
 2. **Add `exprKeys`/`strictYields`, correct `keyRecovery`** (§4.1), re-prove `keyRecoveryMonotone` and
@@ -735,14 +758,14 @@ already exists. Budget for that rather than assuming `deriving` will cope.
 | File | Verdict |
 |---|---|
 | `Expression/Defs.lean` | ✅ correct, matches LM18 §2.1 |
-| `Expression/ComputationalSemantics/Def.lean` | ✅ correct |
+| `Expression/ComputationalSemantics/Def.lean` | ✅ correct; `keyVal`, `subst3` and the two-index resampling chain added |
 | `Expression/ComputationalSemantics/{Normalize,Rename}Preserves.lean` | ✅ complete; `Rename` needs generalising later (§5.3) |
 | `Core/Fixpoints.lean` | ✅ good generalisation |
 | `Expression/Lemmas/HideEncrypted.lean` | ✅ mostly; `allParts` likely redundant with `keySubterms` |
-| `Expression/SymbolicIndistinguishability.lean` | ✅ `keyRecovery` corrected, `symbolicEquivalence` removed, `seedFree` added. ⚠️ still carries the **false** `extractKeys_hideEncrypted_self` (§4.5) |
+| `Expression/SymbolicIndistinguishability.lean` | ✅ `keyRecovery` corrected; `symbolicEquivalence` and the false `extractKeys_hideEncrypted_self` removed; `seedFree` and the LM18 independence vocabulary (`yields`, `IndependentKeys`, `rootsOf`, …) added |
 | `Expression/ComputationalSemantics/PrgSecurity.lean` | ✅ ideal oracle fixed, axiom removed, definitions kept |
 | `.../SoundnessProof/HidingOneKey.lean` | ✅ `sorry`-free; `seedFree` hypothesis added, `'` variants promoted |
-| `.../SoundnessProof/HidingOnePrgSeed.lean` | ⚠️ unchanged — **keep and finish**; it is the base case of LM18 Thm 1 (§5.3). Body still empty (§4.7-1), hypothesis still unusable (§4.3-1) |
+| `.../SoundnessProof/HidingOnePrgSeed.lean` | ✅ reduction implemented, both world lemmas and the hop proved; `PrgHopChain`/`prgHopChainSound` added |
 | `.../SoundnessProof/AdversaryView.lean` | ✅ `sorry`-free; game hops replaced by the vacuity argument under `hidingSideCondition`; `'` copy deleted |
-| `.../Soundness.lean` | ⚠️ now carries `Hatomic1`/`Hatomic2`; sound modulo §4.5 and §5.3 |
+| `.../Soundness.lean` | ✅ `sorry`-free; carries `Hatomic1`/`Hatomic2`, which §5.3 would discharge |
 | `Garbling/**` | ❌ not started (§5.4) |

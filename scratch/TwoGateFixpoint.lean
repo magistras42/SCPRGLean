@@ -84,10 +84,7 @@ def nameOf : Expression 𝕂 -> String
 def lst (S : Finset (Expression 𝕂)) : List String :=
   (cands.filter (fun k => decide (k ∈ S))).map nameOf
 
-/-- `Roots(S) = S \ 𝖦⁺(S)` -/
-def rootsOf (S : Finset (Expression 𝕂)) : List (Expression 𝕂) :=
-  (cands.filter (fun k => decide (k ∈ S))).filter
-    (fun k => !(cands.any (fun k' => decide (k' ∈ S) && strictYields k' k)))
+-- `rootsOf` (LM18 `Roots`) and `isAtomicKey` now live in the library, so we use those.
 
 -- ===================================================================
 -- greatest-fixpoint iteration, unrolled by hand.  `greatestFixpoint` starts at
@@ -112,8 +109,10 @@ def S4 := keyRecovery e S3
 def view := hideEncrypted S3 e   -- = adversaryView e
 
 #eval ("Keys(adversaryView e)", lst (exprKeys view))
-#eval ("Roots(Keys(view))",     (rootsOf (exprKeys view)).map nameOf)
-#eval ("NON-ATOMIC ROOTS",      ((rootsOf (exprKeys view)).filter (fun k => !isAtomicKey k)).map nameOf)
+#eval ("Roots(Keys(view))",     lst (rootsOf (exprKeys view)))
+#eval ("NON-ATOMIC ROOTS",      lst ((rootsOf (exprKeys view)).filter (fun k => !isAtomicKey k)))
+-- by `ancestorKeys_eq_empty_iff` this decides LM18 independence of Keys(view)
+#eval ("Keys(view) independent (LM18)?", decide (ancestorKeys (exprKeys view) = ∅))
 
 #eval ("K_h^0     in Keys(view)?", decide (Kh0 ∈ exprKeys view))
 #eval ("G0(K_h^0) in Keys(view)?", decide ((Expression.G0 Kh0) ∈ exprKeys view))
