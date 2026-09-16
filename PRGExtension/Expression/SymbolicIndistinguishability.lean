@@ -215,6 +215,36 @@ def exprKeys {s : Shape} (p : Expression s) : Finset (Expression Shape.KeyS) :=
   | Expression.Hidden k => exprKeys k
   | _ => ∅
 
+-- The keys an expression uses *as encryption keys* (including the keys of pattern holes).
+-- LM18 splits `Keys(e)` into the keys that occur as parts and the keys that encrypt;
+-- `extractKeys` is the former, `encKeys` the latter.  Lemma 6 is stated about the latter.
+def encKeys {s : Shape} (p : Expression s) : Finset (Expression Shape.KeyS) :=
+  match p with
+  | Expression.Pair p1 p2 => encKeys p1 ∪ encKeys p2
+  | Expression.Perm _ p1 p2 => encKeys p1 ∪ encKeys p2
+  | Expression.Enc k e => {k} ∪ encKeys e
+  | Expression.Hidden k => {k}
+  | _ => ∅
+
+lemma exprKeys_eq_extractKeys_union_encKeys {s : Shape} (p : Expression s) :
+  exprKeys p = extractKeys p ∪ encKeys p := by
+  induction p with
+  | VarK n => simp [exprKeys, extractKeys, encKeys]
+  | BitE b => simp [exprKeys, extractKeys, encKeys]
+  | Eps => simp [exprKeys, extractKeys, encKeys]
+  | G0 e _ => simp [exprKeys, extractKeys, encKeys]
+  | G1 e _ => simp [exprKeys, extractKeys, encKeys]
+  | Pair e1 e2 ih1 ih2 =>
+      simp only [exprKeys, extractKeys, encKeys, ih1, ih2]
+      ac_rfl
+  | Perm b e1 e2 _ ih1 ih2 =>
+      simp only [exprKeys, extractKeys, encKeys, ih1, ih2]
+      ac_rfl
+  | Enc k e _ ihe =>
+      simp only [exprKeys, extractKeys, encKeys, ihe]
+      cases k <;> simp [exprKeys] <;> ac_rfl
+  | Hidden k _ => cases k <;> simp [exprKeys, extractKeys, encKeys]
+
 -- LM18 `k ≺ k'`: `k'` is a *strict* PRG-descendant of `k`, i.e. `k' ∈ 𝖦⁺(k)`.
 def strictYields (k : Expression Shape.KeyS) : Expression Shape.KeyS → Bool
   | Expression.G0 seed => (seed == k) || strictYields k seed

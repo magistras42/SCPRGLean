@@ -148,3 +148,81 @@ theorem symbolicToSemanticIndistinguishabilityAtomic
     (fun S => hidingSideCondition_of_atomicKeys (atomicKeys_hideEncrypted S HA1))
     (fun S => hidingSideCondition_of_atomicKeys (atomicKeys_hideEncrypted S HA2))
     Hi
+
+/--
+  **The one remaining gap between the framework and the garbling application.**
+
+  `hidingSideCondition` (LM18 Lemma 3, property 1: "the keys being hidden are atomic") is
+  **false** for PRG garbled circuits.  `scratch/GarbleSideCondition.lean` computes
+  `Garble andC (true,true)` — a `NAnd` feeding a `Dup` feeding a second `NAnd` — and finds
+  that at the fixpoint the hidden key set is `{G0 K₄, G1 K₄}`, which is not atomic.  That
+  is not an artefact of the encoding: it is exactly LM18's observation that
+  `Roots(Keys(e)) ⊆ 𝐊` fails once `Dup` derives wire keys with the PRG.
+
+  LM18 closes it with the general case of Lemma 3: rename the roots of `Keys(e)` to fresh
+  atomic keys, run the atomic argument, and rename back.  Both renamings are instances of
+  `PrgRenameRel`, so the *computational* content is already available (`prgRename`).  What
+  is missing is purely symbolic: the construction of that renaming, and the fact that it
+  carries the adversary view along.  `AtomicisationBridge` is exactly that statement.
+
+  Given it, `symbolicToSemanticIndistinguishabilityOfBridge` below needs no side
+  conditions at all.
+-/
+def AtomicisationBridge : Prop :=
+  ∀ {s : Shape} (e : Expression s),
+    ∃ e' : Expression s,
+      PrgRenameRel e e' ∧
+      (∀ S : Finset (Expression Shape.KeyS), hidingSideCondition (hideEncrypted S e')) ∧
+      PrgRenameRel (adversaryView e') (adversaryView e)
+
+/--
+  Soundness with **no side conditions**, modulo the single symbolic obligation
+  `AtomicisationBridge`.
+
+  Every cryptographic step is discharged: the `PrgRenameRel` hops by `prgRename`
+  (PRG security), the adversary-view hop by
+  `symbolicToSemanticIndistinguishabilityAdversaryView` (IND-CPA), and the final step by
+  the exact-equality normalisation and renaming lemmas.
+-/
+theorem symbolicToSemanticIndistinguishabilityOfBridge
+  (IsPolyTime : PolyFamOracleCompPred)
+  (HPolyTime : PolyTimeClosedUnderComposition (fun {_ _ _} => IsPolyTime))
+  (Hreduction : ∀ (enc : encryptionScheme) (prg : prgScheme) (shape : Shape) (expr : Expression shape) (key₀ : ℕ),
+    IsPolyTime (reductionHidingOneKey enc prg expr key₀))
+  (HreductionPrg : forall (enc_ : encryptionScheme) (prg_ : prgScheme) (s_ : Shape) (expr_ : Expression s_) (targetSeed_ : Expression Shape.KeyS) (idx0_ idx1_ : ℕ),
+    IsPolyTime (fun κ => reductionToPrgOracle enc_ prg_ expr_ targetSeed_ idx0_ idx1_ κ))
+  (enc : encryptionScheme)
+  (prg : prgScheme)
+  (HEncIndCpa : encryptionSchemeIndCpa (fun {_ _ _} => IsPolyTime) enc)
+  (HPrgSecure : prgSchemeSecure (fun {_ _ _} => IsPolyTime) prg)
+  (Hbridge : AtomicisationBridge)
+  {shape : Shape} (expr1 expr2 : Expression shape)
+  (Hi : symIndistinguishable expr1 expr2) :
+  CompIndistinguishabilityDistr (fun {_ _ _} => IsPolyTime)
+    (famDistrLift (exprToFamDistr enc prg expr1))
+    (famDistrLift (exprToFamDistr enc prg expr2)) := by
+  -- `e ≈ adversaryView e`, via the atomicised representative `e'`
+  have hop : ∀ (e : Expression shape),
+      CompIndistinguishabilityDistr (fun {_ _ _} => IsPolyTime)
+        (famDistrLift (exprToFamDistr enc prg e))
+        (famDistrLift (exprToFamDistr enc prg (adversaryView e))) := by
+    intro e
+    obtain ⟨e', Hren, Hsc, Hview⟩ := Hbridge e
+    apply indTrans
+    · exact prgRename IsPolyTime HPolyTime HreductionPrg enc prg HPrgSecure Hren
+    apply indTrans
+    · exact symbolicToSemanticIndistinguishabilityAdversaryView IsPolyTime HPolyTime
+        Hreduction HreductionPrg enc prg HEncIndCpa HPrgSecure e' Hsc
+    · exact prgRename IsPolyTime HPolyTime HreductionPrg enc prg HPrgSecure Hview
+  -- the symbolic equality, pushed to distributions exactly as in the main theorem
+  simp [symIndistinguishable] at Hi
+  let ⟨r, Hr, Hi⟩ := Hi
+  let fab {X Y : Type} {a b : X} (f : X -> Y) (H : a = b) : f a = f b := by rw [H]
+  have Hi2 := fab (exprToFamDistr enc prg) Hi
+  rw [<-normalizeExprToDistr] at Hi2
+  rw [<-normalizeExprToDistr] at Hi2
+  rw [<-applyRenamePreservesCompSem2 enc prg] at Hi2 <;> try assumption
+  apply indTrans (fun {I Spec Output} ↦ IsPolyTime)
+  · exact hop expr1
+  · rw [Hi2]
+    exact indSym (hop expr2)

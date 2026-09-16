@@ -15,6 +15,11 @@ import PRGExtension.Expression.ComputationalSemantics.Def
 import PRGExtension.Expression.ComputationalSemantics.Soundness
 import PRGExtension.Expression.ComputationalSemantics.RenamePreserves
 
+-- PRG-based garbled circuits (LM18 §3-§5): definitions and the independence invariants.
+import PRGExtension.Garbling.Circuits
+import PRGExtension.Garbling.GarblingDef
+import PRGExtension.Garbling.Independence
+
 import VCVio2.ToMathlib.Control.MonadTransformer
 import VCVio2.VCVio.OracleComp.OracleComp
 import VCVio2.VCVio.OracleComp.DistSemantics.EvalDist

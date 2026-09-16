@@ -3,6 +3,82 @@
 All notable changes to the proofs and code in this repository.
 Section numbers in brackets refer to [`PRGExtension-Analysis.md`](PRGExtension-Analysis.md).
 
+## [2026-09-16c] LM18 Lemma 2 proved; garbling module and Lemmas 4–8
+
+Still `sorry`-free; all new results check with only `propext, Classical.choice, Quot.sound`.
+
+### Added — LM18 Lemma 2 (proved)
+
+`Soundness.lean`: `PrgRenameRel`, the class of pseudorandom key renamings presented by its
+generators (atomic-variable bijections, and re-rooting one PRG node via `replacePRG`,
+closed under `symm`/`trans`), and
+
+* **`prgRename`** — expressions related by a pseudorandom key renaming have
+  computationally indistinguishable semantics. The atomic generator contributes an *exact*
+  equality (`applyRenamePreservesCompSem2`); only the re-rooting generator consumes PRG
+  security.
+
+Not formalised: the purely symbolic factorisation result [Mic09, Lemma 2] that every
+abstractly `𝖦`-preserving map arises from these generators. The computational content of
+Lemma 2 is proved.
+
+### Added — the side condition is discharged on the PRG-free fragment
+
+`AtomicKeys`, `atomicKeys_of_subset`, `seedFree_of_atomicKeys`,
+`allParts_subset_keySubterms`, `atomicKeys_hideEncrypted`,
+`hidingSideCondition_of_atomicKeys`, and
+
+* **`symbolicToSemanticIndistinguishabilityAtomic`** — soundness with **no** side
+  conditions whenever every key subterm is atomic, i.e. the extended framework specialises
+  back to the original encryption-only one.
+
+Also `encKeys` (the keys used *as encryption keys*) and
+`exprKeys_eq_extractKeys_union_encKeys`, which is LM18's split of `Keys(e)` into parts and
+encrypting keys; Lemma 6 is stated over `encKeys`.
+
+### Added — `PRGExtension/Garbling/`
+
+* `Circuits.lean` — LM18 §3 circuits, plus `WireLabel`. **This is the structural change
+  the port needed**: a label now carries key *expressions*, where the encryption-only
+  framework had `labelType := bundleType ℕ` with keys fixed to `VarK (2n)`/`VarK (2n+1)`.
+* `GarblingDef.lean` — `makeLabels`, `gbEntry`, `gb`, `sim`, `gEnc`, `gMask`, `sEnc`,
+  `sMask`, `labelToExpr`, `Garble`, `Simulate` (LM18 §4–§5). `Gb(Dup, (b,(k⁰,k¹)))` now
+  derives `(b,(G0 k⁰, G0 k¹))` and `(b,(G1 k⁰, G1 k¹))` instead of duplicating the label.
+* `Independence.lean` — `labelKeys`, `StronglyIndependent`, `LabelInvariant`,
+  `garbledWithLabels`, `SubCircuit`, and:
+  * **`lemma4` (proved)** — every key appearing as a *part* of a garbled circuit is atomic.
+    PRG-derived keys occur only as encryption keys.
+  * `Lemma5`, `Lemma6`, `Lemma7`, `Lemma8`, `Theorem5` — written down as named, type-checked
+    propositions rather than `theorem … := by sorry`, so the library stays `sorry`-free and
+    the obligations are explicit. Lemmas 7 and 8 are stated faithfully: `S` is the fixpoint
+    of the *ambient* garbling and the lemma ranges over `SubCircuit`s, because the `Dup`
+    case argues via Lemma 6 about the whole circuit.
+
+### Discovered — `hidingSideCondition` is false for PRG garbled circuits
+
+`scratch/GarbleSideCondition.lean` computes `Garble andC (true,true)` (a `NAnd` feeding a
+`Dup` feeding a second `NAnd`). At the fixpoint the hidden key set is `{G0 K₄, G1 K₄}` —
+**not atomic**. So the side condition threaded through on 2026-09-16 is not satisfiable by
+the intended application; this is LM18's `Roots(Keys(e)) ⊆ 𝐊` failing, now confirmed on a
+real garbled circuit rather than a hand-built witness.
+
+### Added — the remaining gap, reduced to one symbolic obligation
+
+`Soundness.lean`:
+
+* `AtomicisationBridge` — for every `e` there is an `e'` with `PrgRenameRel e e'`, whose
+  hidden keys are atomic at every stage, and with `PrgRenameRel (adversaryView e') (adversaryView e)`.
+  This is the general case of LM18 Lemma 3, and it is **purely symbolic**.
+* **`symbolicToSemanticIndistinguishabilityOfBridge` (proved)** — given the bridge,
+  soundness holds with **no side conditions**. Every cryptographic step is discharged:
+  the renaming hops by `prgRename` (PRG security), the adversary-view hop by IND-CPA, the
+  rest by exact equalities.
+
+So the outstanding work on the expression layer is now exactly one statement with no
+cryptography in it.
+
+---
+
 ## [2026-09-16b] PRG reduction implemented; library is `sorry`-free
 
 `lake build` succeeds with **no `sorry` in `PRGExtension/`**.
