@@ -19,6 +19,7 @@ import PRGExtension.Expression.ComputationalSemantics.RenamePreserves
 import PRGExtension.Garbling.Circuits
 import PRGExtension.Garbling.GarblingDef
 import PRGExtension.Garbling.Evaluation
+import PRGExtension.Garbling.Freshness
 import PRGExtension.Garbling.Independence
 import PRGExtension.Garbling.Correctness
 

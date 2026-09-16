@@ -3,6 +3,69 @@
 All notable changes to the proofs and code in this repository.
 Section numbers in brackets refer to [`PRGExtension-Analysis.md`](PRGExtension-Analysis.md).
 
+## [2026-09-16e] Theorem 4 proved; counter-freshness; Lemma 5/6 statements corrected
+
+Still `sorry`-free.  `garbleCorrect` needs only `propext, Quot.sound`.
+
+### Added — LM18 Theorem 4 (correctness), **proved**
+
+`PRGExtension/Garbling/Correctness.lean`: `parseEncodedBundleCorrect`,
+`parseMaskedBundleCorrect`, `gEvCorrect`, `decodeCorrect`, **`garbleCorrect`**, and
+`theorem4_holds : Theorem4`.  Ported from the encryption-only framework; the new case is
+`Dup`, where `Gb` derives `(G0 k⁰, G0 k¹)` / `(G1 k⁰, G1 k¹)` and `GEv` re-derives
+`G0 k` / `G1 k` from the single encoded key — they agree on either input bit.
+
+Two changes were needed to make it go through:
+
+* **`WireLabel.bit` is now a variable index (`ℕ`), not a general `BitExpr`.**  `decodeCorrect`
+  is *false* for an arbitrary bit expression: `Decode` compares the encoded bit with the
+  mask via `xorVarB`, which returns `none` unless both are variables or negated variables.
+  LM18 has this as a standing fact — label bits are atomic symbols `B_h`, the first clause
+  of the paper's Condition 1 — so encoding it in the type is faithful, and it lets
+  `LabelInvariant` drop that clause.
+* `gEnc`/`gMask`/`sEnc`/`sMask` return label *bundles* (what `gEv` consumes), with explicit
+  `encodedLabelToExpr` / `maskedLabelToExpr` converters used by `Garble`/`Simulate`.
+
+### Added — `PRGExtension/Garbling/Freshness.lean`
+
+LM18 writes `h ← new` and thereafter treats `B_h, K_h⁰, K_h¹` as fresh.  That bookkeeping
+is now explicit and proved: `keyVarsBelow`, `LabelsBelow`, `labelsBelow_mono`,
+`makeLabels_below`, **`gb_ctr_mono`** (`Gb` never rewinds the counter) and
+**`gb_labels_below`** (`Gb` keeps every output label strictly below the counter it returns).
+
+### Changed — Lemma 5 and Lemma 6 statements corrected
+
+Both now take `LabelsBelow ctr u`.  **Without it they are false**: `u` could already mention
+the key variables `2·ctr`, `2·ctr+1` that the `NAnd` case is about to create, or a
+`G`-descendant of them, breaking condition (1).  `gb_labels_below` shows the hypothesis
+propagates through `Gb`, and `makeLabels_below` establishes it at the top, so it is
+available at every inductive step.
+
+(This is the second statement of mine that needed strengthening before it could be
+discharged; Lemmas 7 and 8 were corrected the same way on 2026-09-16c.)
+
+### Still open
+
+| obligation | status |
+|---|---|
+| `Theorem4` | **proved** (`theorem4_holds`) |
+| `lemma4` | **proved** |
+| `Lemma5`, `Lemma6` | statements corrected; not proved |
+| `Lemma7`, `Lemma8` | statements corrected earlier; not proved |
+| `Theorem5` | not proved |
+| `FixpointStepSound` | not proved |
+
+`Lemma5`'s `First` case needs the disjointness `labelKeys v₁ ∩ labelKeys u₂ = ∅`, which is
+exactly what conditions (1)/(2) of the lemma supply — so the strong-independence half is
+not separable from the rest, and the four lemmas have to be done together (as in LM18,
+where 5 and 6 are proved by parallel inductions and 7/8 depend on 6).
+
+`FixpointStepSound` needs the commutation theory for `replacePRG` against `hideEncrypted`,
+`extractKeys`, `exprKeys`, `keySubterms` and `keyRecovery`, plus termination of the
+atomicisation iteration.  None of that is started.
+
+---
+
 ## [2026-09-16d] Atomicisation lemma; `GEval`; the obligation relocated
 
 Still `sorry`-free; all new results check with only `propext, Classical.choice, Quot.sound`.

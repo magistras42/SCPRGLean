@@ -1,4 +1,4 @@
-import PRGExtension.Garbling.GarblingDef
+import PRGExtension.Garbling.Freshness
 
 /-!
 # LM18 Lemmas 4-8: the independence invariants of the garbling scheme
@@ -97,10 +97,17 @@ theorem lemma4 : ∀ {s t : WireBundle} (c : Circuit s t) (u : labelType s) (ctr
 
   Proof: structural induction on `C` (LM18 appendix A).  `NAnd` is the base case that
   creates the two fresh atomic keys; `Dup` is the case where `G` is applied.
+
+  The `LabelsBelow ctr u` hypothesis is LM18's implicit `h ← new` bookkeeping, made
+  explicit: without it the statement is **false**, since `u` could already mention the key
+  variables `2·ctr`, `2·ctr+1` that `NAnd` is about to create, or a `G`-descendant of them.
+  `gb_labels_below` (in `Freshness.lean`) shows the hypothesis propagates through `Gb`, so
+  it is available at every inductive step, and `Garble` establishes it via
+  `makeLabels_below`.
 -/
 def Lemma5 : Prop :=
   ∀ {s t : WireBundle} (c : Circuit s t) (u : labelType s) (ctr : ℕ),
-    StronglyIndependent u →
+    StronglyIndependent u → LabelsBelow ctr u →
     StronglyIndependent (gb c u ctr).2.1 ∧
     ∀ k ∈ labelKeys (gb c u ctr).2.1,
       (∀ k' ∈ exprKeys (garbledWithLabels c (gb c u ctr).1 u), strictYields k k' = false) ∧
@@ -120,7 +127,7 @@ def Lemma5 : Prop :=
 -/
 def Lemma6 : Prop :=
   ∀ {s t : WireBundle} (c : Circuit s t) (u : labelType s) (ctr : ℕ),
-    StronglyIndependent u →
+    StronglyIndependent u → LabelsBelow ctr u →
     ∀ k ∈ encKeys (gb c u ctr).1,
       (∀ k' ∈ exprKeys (gb c u ctr).1, strictYields k k' = false) ∧
       (∀ k' ∈ labelKeys (gb c u ctr).2.1, ¬ yields k k') ∧
