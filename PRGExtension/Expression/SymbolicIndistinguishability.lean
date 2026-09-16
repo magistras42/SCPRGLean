@@ -295,8 +295,66 @@ lemma strictYields_trans (a b : Expression Shape.KeyS) (hab : strictYields a b =
       · subst h; exact Or.inr hab
       · exact Or.inr (strictYields_trans a b hab sd h)
 
+/-- `k ≺ k'` means `k` occurs in `k'`'s chain. -/
+lemma strictYields_mem_keySubterms : ∀ (a b : Expression Shape.KeyS),
+    strictYields a b = true → a ∈ keySubterms b
+  | a, Expression.VarK n, h => by simp [strictYields] at h
+  | a, Expression.G0 sd, h => by
+      simp only [strictYields, Bool.or_eq_true, beq_iff_eq] at h
+      simp only [keySubterms, Finset.mem_union]
+      rcases h with h | h
+      · exact Or.inr (by subst h; cases sd <;> simp [keySubterms])
+      · exact Or.inr (strictYields_mem_keySubterms a sd h)
+  | a, Expression.G1 sd, h => by
+      simp only [strictYields, Bool.or_eq_true, beq_iff_eq] at h
+      simp only [keySubterms, Finset.mem_union]
+      rcases h with h | h
+      · exact Or.inr (by subst h; cases sd <;> simp [keySubterms])
+      · exact Or.inr (strictYields_mem_keySubterms a sd h)
+
+/-- Chains are linear: two keys that both yield `c` are comparable.
+    (LM18 uses this repeatedly, e.g. "`k'' ⪯ k` or `k ≺ k''`".) -/
+lemma strictYields_comparable : ∀ (c a b : Expression Shape.KeyS),
+    strictYields a c = true → strictYields b c = true →
+    a = b ∨ strictYields a b = true ∨ strictYields b a = true
+  | Expression.VarK n, a, b, ha, _ => by simp [strictYields] at ha
+  | Expression.G0 sd, a, b, ha, hb => by
+      simp only [strictYields, Bool.or_eq_true, beq_iff_eq] at ha hb
+      rcases ha with ha | ha
+      · rcases hb with hb | hb
+        · exact Or.inl (by rw [← ha, ← hb])
+        · exact Or.inr (Or.inr (by rw [← ha]; exact hb))
+      · rcases hb with hb | hb
+        · exact Or.inr (Or.inl (by rw [← hb]; exact ha))
+        · exact strictYields_comparable sd a b ha hb
+  | Expression.G1 sd, a, b, ha, hb => by
+      simp only [strictYields, Bool.or_eq_true, beq_iff_eq] at ha hb
+      rcases ha with ha | ha
+      · rcases hb with hb | hb
+        · exact Or.inl (by rw [← ha, ← hb])
+        · exact Or.inr (Or.inr (by rw [← ha]; exact hb))
+      · rcases hb with hb | hb
+        · exact Or.inr (Or.inl (by rw [← hb]; exact ha))
+        · exact strictYields_comparable sd a b ha hb
+
 /-- LM18 `k₁ ⪯ k₂`: `k₂ ∈ 𝖦*(k₁)`, i.e. `k₁` yields `k₂`. -/
 def yields (k1 k2 : Expression Shape.KeyS) : Prop := k1 = k2 ∨ strictYields k1 k2 = true
+
+lemma yields_refl (k : Expression Shape.KeyS) : yields k k := Or.inl rfl
+
+lemma yields_trans {a b c : Expression Shape.KeyS} (hab : yields a b) (hbc : yields b c) :
+    yields a c := by
+  rcases hab with rfl | hab
+  · exact hbc
+  · rcases hbc with rfl | hbc
+    · exact Or.inr hab
+    · exact Or.inr (strictYields_trans a b hab c hbc)
+
+lemma yields_strictYields_trans {a b c : Expression Shape.KeyS} (hab : yields a b)
+    (hbc : strictYields b c = true) : strictYields a c = true := by
+  rcases hab with rfl | hab
+  · exact hbc
+  · exact strictYields_trans a b hab c hbc
 
 /-- LM18: a set of keys is independent when no member yields another.  (Reflexivity is
     free: `strictYields_irrefl`.) -/

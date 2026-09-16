@@ -110,4 +110,128 @@ lemma gb_labels_below : ∀ {s t : WireBundle} (c : Circuit s t) (u : labelType 
       refine ⟨by simpa [gb] using ih u1 ctr h.1, ?_⟩
       exact labelsBelow_mono u2 (by simpa [gb] using gb_ctr_mono c u1 ctr) h.2
 
+/-- Every key variable occurring anywhere in an expression has index `< n`. -/
+def exprKeyVarsBelow (n : ℕ) {s : Shape} (e : Expression s) : Prop :=
+  ∀ m, Expression.VarK m ∈ keySubterms e -> m < n
+
+lemma exprKeyVarsBelow_mono {n n' : ℕ} {s : Shape} {e : Expression s} (h : n ≤ n')
+    (he : exprKeyVarsBelow n e) : exprKeyVarsBelow n' e := fun m hm => lt_of_lt_of_le (he m hm) h
+
+-- closure of `exprKeyVarsBelow` under the constructors we need
+lemma ekvb_bitE {n : ℕ} (b : BitExpr) : exprKeyVarsBelow n (Expression.BitE b) := by
+  intro m hm; simp [keySubterms] at hm
+lemma ekvb_eps {n : ℕ} : exprKeyVarsBelow n (Expression.Eps) := by
+  intro m hm; simp [keySubterms] at hm
+lemma ekvb_varK {n j : ℕ} (h : j < n) : exprKeyVarsBelow n (Expression.VarK j) := by
+  intro m hm; simp only [keySubterms, Finset.mem_singleton] at hm; injection hm with hm; omega
+lemma ekvb_pair {n : ℕ} {s1 s2 : Shape} {a : Expression s1} {b : Expression s2}
+    (ha : exprKeyVarsBelow n a) (hb : exprKeyVarsBelow n b) :
+    exprKeyVarsBelow n (Expression.Pair a b) := by
+  intro m hm; simp only [keySubterms, Finset.mem_union] at hm
+  rcases hm with h | h; exacts [ha m h, hb m h]
+lemma ekvb_perm {n : ℕ} {s1 : Shape} {bt : Expression Shape.BitS} {a b : Expression s1}
+    (ha : exprKeyVarsBelow n a) (hb : exprKeyVarsBelow n b) :
+    exprKeyVarsBelow n (Expression.Perm bt a b) := by
+  intro m hm; simp only [keySubterms, Finset.mem_union] at hm
+  rcases hm with h | h; exacts [ha m h, hb m h]
+lemma ekvb_enc {n : ℕ} {s1 : Shape} {k : Expression Shape.KeyS} {e : Expression s1}
+    (hk : keyVarsBelow n k) (he : exprKeyVarsBelow n e) :
+    exprKeyVarsBelow n (Expression.Enc k e) := by
+  intro m hm; simp only [keySubterms, Finset.mem_union] at hm
+  rcases hm with h | h; exacts [hk m h, he m h]
+
+lemma ekvb_gbEntry {n : ℕ} {ko ki kp : Expression Shape.KeyS} {bt : BitExpr}
+    (hko : keyVarsBelow n ko) (hki : keyVarsBelow n ki) (hkp : keyVarsBelow n kp) :
+    exprKeyVarsBelow n (gbEntry ko ki kp bt) :=
+  ekvb_enc hko (ekvb_enc hki (ekvb_pair (ekvb_bitE bt) (fun m hm => hkp m hm)))
+
+/-- The garbled circuit only mentions key variables below the counter `Gb` returns. -/
+lemma gb_circuit_below : ∀ {s t : WireBundle} (c : Circuit s t) (u : labelType s) (ctr : ℕ),
+    LabelsBelow ctr u -> exprKeyVarsBelow (2*(gb c u ctr).2.2) (gb c u ctr).1 := by
+  intro s t c
+  induction c with
+  | NandC =>
+      rintro ⟨li, lj⟩ ctr h
+      simp only [LabelsBelow] at h
+      have hi0 : keyVarsBelow (2*(ctr+1)) li.key0 := keyVarsBelow_mono (by omega) h.1.2.1
+      have hi1 : keyVarsBelow (2*(ctr+1)) li.key1 := keyVarsBelow_mono (by omega) h.1.2.2
+      have hj0 : keyVarsBelow (2*(ctr+1)) lj.key0 := keyVarsBelow_mono (by omega) h.2.2.1
+      have hj1 : keyVarsBelow (2*(ctr+1)) lj.key1 := keyVarsBelow_mono (by omega) h.2.2.2
+      have hk0 : keyVarsBelow (2*(ctr+1)) (Expression.VarK (2*ctr)) := by
+        intro m hm; simp only [keySubterms, Finset.mem_singleton] at hm
+        injection hm with hm; omega
+      have hk1 : keyVarsBelow (2*(ctr+1)) (Expression.VarK (2*ctr+1)) := by
+        intro m hm; simp only [keySubterms, Finset.mem_singleton] at hm
+        injection hm with hm; omega
+      have hres : (gb Circuit.NandC (li, lj) ctr).2.2 = ctr + 1 := by simp [gb]
+      rw [hres]
+      show exprKeyVarsBelow (2*(ctr+1)) (gb Circuit.NandC (li, lj) ctr).1
+      simp only [gb]
+      exact ekvb_perm (ekvb_perm (ekvb_gbEntry hi0 hj0 hk1) (ekvb_gbEntry hi0 hj1 hk1))
+                      (ekvb_perm (ekvb_gbEntry hi1 hj0 hk1) (ekvb_gbEntry hi1 hj1 hk0))
+  | AssocC _ _ _ => rintro ⟨i1, i2, i3⟩ ctr _; simpa [gb] using (ekvb_eps (n := 2*ctr))
+  | UnAssocC _ _ _ => rintro ⟨⟨i1, i2⟩, i3⟩ ctr _; simpa [gb] using (ekvb_eps (n := 2*ctr))
+  | SwapC _ _ => rintro ⟨i1, i2⟩ ctr _; simpa [gb] using (ekvb_eps (n := 2*ctr))
+  | DupC => intro l ctr _; simpa [gb] using (ekvb_eps (n := 2*ctr))
+  | ComposeC c1 c2 ih1 ih2 =>
+      intro u ctr h
+      have h1 := ih1 u ctr h
+      have h2 := ih2 (gb c1 u ctr).2.1 (gb c1 u ctr).2.2 (gb_labels_below c1 u ctr h)
+      have hmono := gb_ctr_mono c2 (gb c1 u ctr).2.1 (gb c1 u ctr).2.2
+      have he : (gb (Circuit.ComposeC c1 c2) u ctr).1
+          = Expression.Pair (gb c1 u ctr).1 (gb c2 (gb c1 u ctr).2.1 (gb c1 u ctr).2.2).1 := by
+        simp [gb]
+      have hc : (gb (Circuit.ComposeC c1 c2) u ctr).2.2
+          = (gb c2 (gb c1 u ctr).2.1 (gb c1 u ctr).2.2).2.2 := by simp [gb]
+      rw [hc, he]
+      exact ekvb_pair (exprKeyVarsBelow_mono (by omega) h1) h2
+  | FirstC c w ih =>
+      rintro ⟨u1, u2⟩ ctr h
+      have := ih u1 ctr h.1
+      have he : (gb (Circuit.FirstC c w) (u1, u2) ctr).1 = (gb c u1 ctr).1 := by simp [gb]
+      have hc : (gb (Circuit.FirstC c w) (u1, u2) ctr).2.2 = (gb c u1 ctr).2.2 := by simp [gb]
+      rw [hc, he]; exact this
+
+/-- The keys appearing as *parts* of a garbled circuit are the fresh atomic keys created by
+    its `NAnd` gates, so they lie in the counter window `[2·ctr, 2·ctr')`. -/
+lemma gb_parts_fresh : ∀ {s t : WireBundle} (c : Circuit s t) (u : labelType s) (ctr : ℕ),
+    ∀ k ∈ extractKeys (gb c u ctr).1,
+      ∃ m, k = Expression.VarK m ∧ 2*ctr ≤ m ∧ m < 2*(gb c u ctr).2.2 := by
+  intro s t c
+  induction c with
+  | NandC =>
+      rintro ⟨li, lj⟩ ctr k hk
+      have hres : (gb Circuit.NandC (li, lj) ctr).2.2 = ctr + 1 := by simp [gb]
+      simp [gb, gbEntry, extractKeys] at hk
+      rw [hres]
+      rcases hk with h | h
+      · exact ⟨2*ctr+1, h, by omega, by omega⟩
+      · exact ⟨2*ctr, h, by omega, by omega⟩
+  | AssocC _ _ _ => rintro ⟨i1, i2, i3⟩ ctr k hk; simp [gb, extractKeys] at hk
+  | UnAssocC _ _ _ => rintro ⟨⟨i1, i2⟩, i3⟩ ctr k hk; simp [gb, extractKeys] at hk
+  | SwapC _ _ => rintro ⟨i1, i2⟩ ctr k hk; simp [gb, extractKeys] at hk
+  | DupC => intro l ctr k hk; simp [gb, extractKeys] at hk
+  | ComposeC c1 c2 ih1 ih2 =>
+      intro u ctr k hk
+      have hmono1 := gb_ctr_mono c1 u ctr
+      have hmono2 := gb_ctr_mono c2 (gb c1 u ctr).2.1 (gb c1 u ctr).2.2
+      have hc : (gb (Circuit.ComposeC c1 c2) u ctr).2.2
+          = (gb c2 (gb c1 u ctr).2.1 (gb c1 u ctr).2.2).2.2 := by simp [gb]
+      have he : extractKeys (gb (Circuit.ComposeC c1 c2) u ctr).1
+          = extractKeys (gb c1 u ctr).1
+            ∪ extractKeys (gb c2 (gb c1 u ctr).2.1 (gb c1 u ctr).2.2).1 := by
+        simp [gb, extractKeys]
+      rw [he, Finset.mem_union] at hk
+      rw [hc]
+      rcases hk with h | h
+      · obtain ⟨m, hm, ha, hb⟩ := ih1 u ctr k h; exact ⟨m, hm, by omega, by omega⟩
+      · obtain ⟨m, hm, ha, hb⟩ := ih2 _ _ k h; exact ⟨m, hm, by omega, by omega⟩
+  | FirstC c w ih =>
+      rintro ⟨u1, u2⟩ ctr k hk
+      have hc : (gb (Circuit.FirstC c w) (u1, u2) ctr).2.2 = (gb c u1 ctr).2.2 := by simp [gb]
+      have he : (gb (Circuit.FirstC c w) (u1, u2) ctr).1 = (gb c u1 ctr).1 := by simp [gb]
+      rw [he] at hk
+      rw [hc]
+      exact ih u1 ctr k hk
+
 end PRG
