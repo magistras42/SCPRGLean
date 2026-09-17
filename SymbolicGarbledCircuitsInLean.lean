@@ -27,6 +27,9 @@ import PRGExtension.Garbling.Lemma6
 import PRGExtension.Garbling.GarbleKeys
 import PRGExtension.Garbling.GarbleFixpoint
 import PRGExtension.Garbling.GbStage
+import PRGExtension.Garbling.ViewKeys
+import PRGExtension.Garbling.Lemma7
+import PRGExtension.Garbling.Lemma8
 
 import VCVio2.ToMathlib.Control.MonadTransformer
 import VCVio2.VCVio.OracleComp.OracleComp

@@ -87,7 +87,13 @@ def LabelInvariant (S : Finset (Expression Shape.KeyS)) :
 def LabelInvariantIn (U S : Finset (Expression Shape.KeyS)) :
     {b : WireBundle} -> labelType b -> Prop
   | WireBundle.SimpleB, l =>
-      (l.key0 ∈ U ∨ l.key1 ∈ U) →
+      -- The guard is a *conjunction*: the invariant says something only about labels both of
+      -- whose keys occur in the ambient expression.  With a disjunction the `Dup` case is
+      -- unprovable — from `G0 k¹ ∈ U` alone one cannot place `G0 k⁰` in `U`, which
+      -- `adversaryKeys_G0_closed` requires.  A conjunction loses nothing: wherever a label is
+      -- actually *used* (as the pair of encryption keys of a `NAnd` table, or `G`-applied by
+      -- `Dup`) both of its keys occur, so the invariant fires exactly where Theorem 5 needs it.
+      (l.key0 ∈ U ∧ l.key1 ∈ U) →
       ((l.key0 ∈ S ∧ l.key1 ∉ S) ∨ (l.key1 ∈ S ∧ l.key0 ∉ S))
   | WireBundle.PairB _ _, (l1, l2) => LabelInvariantIn U S l1 ∧ LabelInvariantIn U S l2
 

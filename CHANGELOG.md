@@ -3,6 +3,102 @@
 All notable changes to the proofs and code in this repository.
 Section numbers in brackets refer to [`PRGExtension-Analysis.md`](PRGExtension-Analysis.md).
 
+## [2026-09-16k] — **LM18 Lemmas 7 and 8 proved**
+
+`lemma7 : Lemma7` and `lemma8 : Lemma8` are now theorems.  Build is clean and `sorry`-free;
+both depend only on `propext, Classical.choice, Quot.sound`.
+
+### Changed — the `LabelInvariantIn` guard is now a conjunction
+
+`Garbling/Independence.lean`.  Was `(l.key0 ∈ U ∨ l.key1 ∈ U) → …`, now
+`(l.key0 ∈ U ∧ l.key1 ∈ U) → …`.
+
+With a disjunction the `Dup` case is **unprovable**.  From `G0 k¹ ∈ U` alone one cannot place
+`G0 k⁰` in `U`, and `adversaryKeys_G0_closed` — the lemma that pushes the *known* key through
+the PRG — requires exactly that.  One could instead prove that `keySubterms (Garble c x)`
+contains both keys of a label or neither (it does, because every construct uses a label
+symmetrically), but that is a separate induction for no gain: a conjunction loses nothing,
+since wherever a label is actually used — as the pair of encryption keys of a `NAnd` table,
+or `G`-applied by `Dup` — both of its keys occur, so the invariant fires exactly where
+Theorem 5 needs it.
+
+### Added — `Garbling/ViewKeys.lean` (new)
+
+What the adversary can read out of a garbled circuit, in three groups.
+
+**Atomicity of recovery.**
+* `atomic_mem_prgStep`, `atomic_mem_prgClosure` — the PRG closure only ever adds *derived*
+  keys, so an atomic key is in `prgClosure U base` only if it was in `base`.
+* `hideEncrypted_key` — `hideEncrypted` is the identity on a pure key expression.
+* `encKeys_hideEncrypted` — hiding never invents an encryption key.
+* `keySubterms_self`, `keySubterms_of_G0`, `keySubterms_of_G1` — `keySubterms` is
+  subterm-closed through the PRG constructors.
+* `encKeys_gEnc`, `encKeys_maskedLabelToExpr`.
+* `lemma6_garble_enc` — **LM18 Lemma 6(1) keyed on encryption keys**, generalising
+  `lemma6_garble_cond1` (which only covered non-atomic keys and so did not apply to the
+  fresh `VarK` payloads).
+* `extractKeys_adversaryView_subset` — everything readable off the view is recovered.
+* **`atomic_recovered_garble`** — *an atomic key is recovered only by decryption.*
+  `keyRecovery` has two sources, `extractKeys` of the view and Definition 3's ancestor
+  clause.  The closure on top adds nothing atomic; and the ancestor clause can only fire on
+  a key that occurs in the view, which (by `exprKeys = extractKeys ∪ encKeys`) is either
+  already in `extractKeys` or is an *encryption* key — and Lemma 6 forbids a strict
+  descendant of an encryption key from occurring, making the clause vacuous.
+
+**Locality.**
+* `extractKeys_view_gbEntry` — a table row yields its payload exactly when both its outer and
+  inner keys are known.
+* `extractKeys_view_range` — every key read out of `gb c u ctr` is one of the payload key
+  variables `K_{2n}, K_{2n+1}` minted by a `NAnd` gate *inside* `c`, i.e. has index in
+  `[2·ctr, 2·ctr_final)`.
+* `GbStage.final_le` — a stage's final counter is bounded by the ambient one.
+* **`GbStage.view_extract_iso`** — *no interference between stages.*  A key read out of the
+  whole garbled circuit whose index lies in a stage's counter range was read out of **that**
+  stage.  Because `Compose` splits the counter range at an even endpoint, the two halves'
+  ranges are disjoint and a `{2n, 2n+1}` pair never straddles them.  This is what lets the
+  `NAnd` case of Lemma 7 reason locally about its own two fresh keys.
+
+**Plumbing.** `GbStage.trans`, `GbStage.keySubterms_subset`, `GbStage.view_extract_mono`,
+`extractKeys_view_gEnc`.
+
+### Added — `Garbling/Lemma7.lean` (new)
+
+* `extractKeys_view_mask`, `extractKeys_adversaryView_garble` (the view of `Garble` splits
+  into table + encoded input; the masks contribute no keys), `keySubterms_garble_gb`,
+  `fresh_not_input` (a key minted at or after the input counter is not an input label key).
+* `nand_view_extract` — the four-row computation of what a `NAnd` table reveals.
+* `nand_keySubterms` — both keys of a gate's input labels occur in its table, which is what
+  discharges the invariant's guard for `l_i` and `l_j`.
+* **`lemma7 : Lemma7`**, by induction on the sub-circuit with the `GbStage` hypothesis
+  threaded through `GbStage.trans`.  `NAnd`: exactly one row decrypts, so exactly one fresh
+  key is revealed; it is in `S`, and the other is not — if it were, being atomic it would
+  have to be readable off the view (`atomic_recovered_garble`), and `view_extract_iso` places
+  it in this gate's contribution, which is the singleton just computed.  `Dup`:
+  `adversaryKeys_G0_closed` pushes the known key through the PRG,
+  `adversaryKeys_G0_seed` keeps the unknown one unknown.
+
+### Added — `Garbling/Lemma8.lean` (new)
+
+* `sim_snd_fst`, `sim_snd_snd`, and the `sim` ports of the locality machinery:
+  `extractKeys_view_range_sim`, `GbStage.view_extract_iso_sim`,
+  `GbStage.view_extract_mono_sim`, `GbStage.keySubterms_subset_sim`.
+* **`encKeys_sim_eq_gb`** and **`exprKeys_sim_subset_gb`** — `Sim` uses the same encryption
+  keys as `Gb` and a subset of its key set (its payload is always `K_h⁰`, one of the two keys
+  `Gb` uses).  Hence LM18 Lemma 6 transports to the simulator for free: `lemma6_sim_cond1`,
+  `lemma6_simulate_enc`.  No separate Lemma 6 proof for `Sim` was needed.
+* `atomic_recovered_simulate`, `adversaryKeys_G0_seed_sim`, `adversaryKeys_G1_seed_sim`.
+* `extractKeys_view_sEnc`, `extractKeys_view_sMask`, `extractKeys_adversaryView_simulate`,
+  `keySubterms_simulate_sim`, `fresh_not_input_sim`, `sim_view_extract`,
+  `nand_keySubterms_sim`.
+* **`lemma8_gb`** and **`lemma8 : Lemma8`**.  Stated over `gb`'s output labels — they are
+  `sim`'s — which makes the `Compose` case chain directly.  The `NAnd` case is easier than
+  Lemma 7's: every row of a simulated table carries the same payload `K_h⁰`, so whichever row
+  decrypts the recovered key is `K_{2n}`, and `K_{2n+1}` is never recovered at all.
+
+### Status
+
+`Theorem5` and `FixpointStepSound` remain the open obligations.
+
 ## [2026-09-16j] — Garbling stages: `GbStage` replaces bare `SubCircuit` in Lemmas 7/8
 
 ### Why

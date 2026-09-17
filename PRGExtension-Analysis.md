@@ -643,8 +643,31 @@ sits inside the global one, so fixpoint facts about `adversaryKeys (Garble c x)`
 counters exactly as `Gb` does, so one stage relation serves both Lemma 7 and Lemma 8.
 Again: the defect is in the formalisation's reading, not in LM18.
 
-Remaining: `Lemma7`, `Lemma8`, `Theorem5` (in `GbStage.lean`) and `FixpointStepSound`
-(in `AdversaryView.lean`), all as named type-checked `Prop`s.
+**Lemmas 7 and 8 are now proved** (`Garbling/Lemma7.lean`, `Garbling/Lemma8.lean`), on top of
+`Garbling/ViewKeys.lean`.  The key new fact is `atomic_recovered_garble`: *an atomic key is
+recovered only by decryption*.  `keyRecovery` has two sources — `extractKeys` of the view and
+Definition 3's ancestor clause — and the PRG closure on top adds only derived keys; the
+ancestor clause can only fire on a key occurring in the view, which is either already in
+`extractKeys` or is an *encryption* key, and LM18 Lemma 6 forbids a strict descendant of an
+encryption key from occurring.  Paired with `GbStage.view_extract_iso` (a key whose index
+lies in a stage's counter range was read out of that stage and nowhere else — the counter
+ranges of `Compose`'s two halves split at an even endpoint, so a `{2n, 2n+1}` pair never
+straddles them), this makes the `NAnd` case of Lemma 7 a local argument: exactly one of the
+four rows decrypts, revealing exactly one of the gate's two fresh keys, and the other cannot
+be in the fixpoint because nothing else in the circuit could have supplied it.
+
+One statement change was forced: `LabelInvariantIn`'s guard is now `l.key0 ∈ U ∧ l.key1 ∈ U`
+rather than a disjunction.  With a disjunction the `Dup` case is unprovable — from
+`G0 k¹ ∈ U` alone one cannot place `G0 k⁰` in `U`, which `adversaryKeys_G0_closed` requires
+— and a conjunction loses nothing, since wherever a label is actually used both of its keys
+occur.
+
+Lemma 8 needed no separate Lemma 6 proof: `encKeys_sim_eq_gb` and `exprKeys_sim_subset_gb`
+show `Sim` uses the same encryption keys as `Gb` and a subset of its key set, so Lemma 6
+transports to the simulator directly.
+
+Remaining: `Theorem5` (in `GbStage.lean`) and `FixpointStepSound` (in `AdversaryView.lean`),
+both as named type-checked `Prop`s.
 
 ---
 
