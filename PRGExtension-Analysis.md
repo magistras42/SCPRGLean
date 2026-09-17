@@ -621,6 +621,31 @@ indices — which ripples through `GarblingDef`, `Simulate`, `Correctness`, `Sec
 `SymbolicHiding/` files. Expect this to be a rewrite rather than a port. The counterpart LM18 results are
 Lemmas 5–8 (strong independence of label expressions is preserved by `Gb`) and Theorems 4–5.
 
+**STATUS: the port is done and Lemmas 4–6 and Theorem 4 are proved.** `labelType` now carries
+`WireLabel = ⟨bit : ℕ, key0 key1 : Expression 𝕂⟩`, `Gb(Dup)` applies `G0`/`G1`, and
+`Garbling/{Circuits,GarblingDef,Evaluation,Correctness,Freshness,Independence,Lemma5,Lemma6,GarbleKeys,GarbleFixpoint,GbStage}.lean`
+build `sorry`-free.
+
+One statement-level correction was needed beyond the port. LM18 states Lemmas 7 and 8 as "for
+any sub-circuit `C'` of `C` and any label expression `u` …". Taken literally that is **false**
+here, because `gb` takes the input labels `u` and the key counter `ctr` as *independent*
+arguments: for arbitrary `u`/`ctr` the keys `K_{2·ctr}, K_{2·ctr+1}` that `NAnd` mints need not
+be keys of `Garble C x` at all, so nothing constrains their membership in the fixpoint; and
+LM18's own `Dup` case appeals to Lemma 6 *for the whole garbled circuit*, a step with no
+counterpart when `u` is unrelated to `C`. The paper's prose evidently means the labels and
+counter the garbling actually reaches. `Garbling/GbStage.lean` makes that explicit with
+`GbStage c u ctr c' u' ctr'` ("garbling `c` from `(u, ctr)` performs the garbling of `c'` from
+`(u', ctr')` as a sub-computation"), which refines `SubCircuit` and supplies the structural
+facts the proofs need: `ctr_le`, `exprKeys_subset`/`extractKeys_subset` (a stage's expression
+sits inside the global one, so fixpoint facts about `adversaryKeys (Garble c x)` transfer),
+`hyps` (`StronglyIndependent` and `LabelsBelow` are inherited), and `labelKeys_yielded`
+(Lemma 5(2) propagated by `yields_trans`). `sim_snd_eq_gb_snd` shows `Sim` threads labels and
+counters exactly as `Gb` does, so one stage relation serves both Lemma 7 and Lemma 8.
+Again: the defect is in the formalisation's reading, not in LM18.
+
+Remaining: `Lemma7`, `Lemma8`, `Theorem5` (in `GbStage.lean`) and `FixpointStepSound`
+(in `AdversaryView.lean`), all as named type-checked `Prop`s.
+
 ---
 
 ## 6. Recommended order of work
