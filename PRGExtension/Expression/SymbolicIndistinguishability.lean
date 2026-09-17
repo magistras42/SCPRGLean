@@ -1327,6 +1327,149 @@ lemma mem_prgClosure_of_strictYields {U X : Finset (Expression Shape.KeyS)}
   have hle : (keySubterms k).card ≤ U.card := Finset.card_le_card hU
   omega
 
+/-- Once the derivation fold stops growing it stays put. -/
+lemma prgStep_stable {U S : Finset (Expression Shape.KeyS)} {i : ℕ}
+    (h : (prgStep U)^[i+1] S = (prgStep U)^[i] S) :
+    ∀ j, i ≤ j → (prgStep U)^[j] S = (prgStep U)^[i] S := by
+  intro j hj
+  induction j, hj using Nat.le_induction with
+  | base => rfl
+  | succ m hm ih =>
+      rw [Function.iterate_succ_apply', ih, ← Function.iterate_succ_apply' (prgStep U) i S]
+      exact h
+
+/-- Each non-stabilising step adds at least one element of the universe. -/
+lemma prgStep_card_growth (U S : Finset (Expression Shape.KeyS)) :
+    ∀ i : ℕ, (∀ j, j < i → (prgStep U)^[j+1] S ≠ (prgStep U)^[j] S) →
+      i ≤ ((prgStep U)^[i] S ∩ U).card := by
+  intro i
+  induction i with
+  | zero => intro _; omega
+  | succ m ih =>
+      intro h
+      have hm := ih (fun j hj => h j (by omega))
+      have hne := h m (by omega)
+      have hsub : (prgStep U)^[m] S ⊆ (prgStep U)^[m+1] S := by
+        rw [Function.iterate_succ_apply']; exact prgStep_extensive U _
+      obtain ⟨x, hx1, hx2⟩ : ∃ x, x ∈ (prgStep U)^[m+1] S ∧ x ∉ (prgStep U)^[m] S := by
+        by_contra hc
+        push_neg at hc
+        exact hne (Finset.Subset.antisymm (fun y hy => hc y hy) hsub)
+      have hxU : x ∈ U := by
+        rw [Function.iterate_succ_apply'] at hx1
+        simp only [prgStep, Finset.mem_union, Finset.mem_filter] at hx1
+        rcases hx1 with h1 | h1
+        · exact absurd h1 hx2
+        · exact h1.1
+      have hlt : ((prgStep U)^[m] S ∩ U).card < ((prgStep U)^[m+1] S ∩ U).card := by
+        apply Finset.card_lt_card
+        rw [Finset.ssubset_iff_of_subset (Finset.inter_subset_inter hsub (Finset.Subset.refl U))]
+        exact ⟨x, Finset.mem_inter.mpr ⟨hx1, hxU⟩,
+          fun hc => hx2 (Finset.mem_of_mem_inter_left hc)⟩
+      omega
+
+lemma exists_prgStep_stable (U S : Finset (Expression Shape.KeyS)) :
+    ∃ i, i ≤ U.card ∧ (prgStep U)^[i+1] S = (prgStep U)^[i] S := by
+  by_contra hc
+  push_neg at hc
+  have hgrow := prgStep_card_growth U S (U.card + 1) (fun j hj => hc j (by omega))
+  have hle : ((prgStep U)^[U.card+1] S ∩ U).card ≤ U.card :=
+    Finset.card_le_card Finset.inter_subset_right
+  omega
+
+/-- **The bounded `prgClosure` really is a closure**: one more derivation step adds nothing. -/
+theorem prgStep_prgClosure (U S : Finset (Expression Shape.KeyS)) :
+    prgStep U (prgClosure U S) = prgClosure U S := by
+  obtain ⟨i, hi, hstable⟩ := exists_prgStep_stable U S
+  rw [prgClosure_eq_iterate, prgStep_stable hstable (U.card+1) (by omega),
+    ← Function.iterate_succ_apply' (prgStep U) i S]
+  exact hstable
+
+/-- The closure is closed under derivation (within the universe). -/
+theorem G0_mem_prgClosure {U S : Finset (Expression Shape.KeyS)} {k : Expression Shape.KeyS}
+    (hk : k ∈ prgClosure U S) (hU : Expression.G0 k ∈ U) :
+    Expression.G0 k ∈ prgClosure U S := by
+  have hstep : Expression.G0 k ∈ prgStep U (prgClosure U S) := by
+    simp only [prgStep, Finset.mem_union, Finset.mem_filter]
+    exact Or.inr ⟨hU, by simp [isDerived, hk]⟩
+  rwa [prgStep_prgClosure] at hstep
+
+theorem G1_mem_prgClosure {U S : Finset (Expression Shape.KeyS)} {k : Expression Shape.KeyS}
+    (hk : k ∈ prgClosure U S) (hU : Expression.G1 k ∈ U) :
+    Expression.G1 k ∈ prgClosure U S := by
+  have hstep : Expression.G1 k ∈ prgStep U (prgClosure U S) := by
+    simp only [prgStep, Finset.mem_union, Finset.mem_filter]
+    exact Or.inr ⟨hU, by simp [isDerived, hk]⟩
+  rwa [prgStep_prgClosure] at hstep
+
+-- and the converse: a derived key is in the closure only if it was in the base, or its
+-- seed is in the closure
+lemma iterate_reflect_G0 (U S : Finset (Expression Shape.KeyS)) : ∀ (n : ℕ)
+    (k : Expression Shape.KeyS), Expression.G0 k ∈ (prgStep U)^[n] S →
+      Expression.G0 k ∈ S ∨ k ∈ (prgStep U)^[n] S := by
+  intro n
+  induction n with
+  | zero => intro k h; exact Or.inl (by simpa using h)
+  | succ m ih =>
+      intro k h
+      rw [Function.iterate_succ_apply'] at h
+      simp only [prgStep, Finset.mem_union, Finset.mem_filter] at h
+      rcases h with h | h
+      · rcases ih k h with h' | h'
+        · exact Or.inl h'
+        · exact Or.inr (by rw [Function.iterate_succ_apply']; exact prgStep_extensive U _ h')
+      · right
+        rw [Function.iterate_succ_apply']
+        refine prgStep_extensive U _ ?_
+        have h2 := h.2
+        simp only [isDerived, decide_eq_true_eq] at h2
+        exact h2
+
+lemma iterate_reflect_G1 (U S : Finset (Expression Shape.KeyS)) : ∀ (n : ℕ)
+    (k : Expression Shape.KeyS), Expression.G1 k ∈ (prgStep U)^[n] S →
+      Expression.G1 k ∈ S ∨ k ∈ (prgStep U)^[n] S := by
+  intro n
+  induction n with
+  | zero => intro k h; exact Or.inl (by simpa using h)
+  | succ m ih =>
+      intro k h
+      rw [Function.iterate_succ_apply'] at h
+      simp only [prgStep, Finset.mem_union, Finset.mem_filter] at h
+      rcases h with h | h
+      · rcases ih k h with h' | h'
+        · exact Or.inl h'
+        · exact Or.inr (by rw [Function.iterate_succ_apply']; exact prgStep_extensive U _ h')
+      · right
+        rw [Function.iterate_succ_apply']
+        refine prgStep_extensive U _ ?_
+        have h2 := h.2
+        simp only [isDerived, decide_eq_true_eq] at h2
+        exact h2
+
+theorem prgClosure_reflects_G0 {U S : Finset (Expression Shape.KeyS)}
+    {k : Expression Shape.KeyS} (h : Expression.G0 k ∈ prgClosure U S) :
+    Expression.G0 k ∈ S ∨ k ∈ prgClosure U S := by
+  rw [prgClosure_eq_iterate] at h ⊢
+  exact iterate_reflect_G0 U S _ k h
+
+theorem prgClosure_reflects_G1 {U S : Finset (Expression Shape.KeyS)}
+    {k : Expression Shape.KeyS} (h : Expression.G1 k ∈ prgClosure U S) :
+    Expression.G1 k ∈ S ∨ k ∈ prgClosure U S := by
+  rw [prgClosure_eq_iterate] at h ⊢
+  exact iterate_reflect_G1 U S _ k h
+
+
+lemma iterate_of_stable {U X : Finset (Expression Shape.KeyS)} (h : prgStep U X = X) :
+    ∀ n, (prgStep U)^[n] X = X := by
+  intro n; induction n with
+  | zero => rfl
+  | succ m ih => rw [Function.iterate_succ_apply', ih, h]
+
+theorem prgClosure_idem (U S : Finset (Expression Shape.KeyS)) :
+    prgClosure U (prgClosure U S) = prgClosure U S := by
+  rw [prgClosure_eq_iterate (S := prgClosure U S)]
+  exact iterate_of_stable (prgStep_prgClosure U S) _
+
 /-- LM18 `r(e)` (Definition 3) evaluated at a pattern directly, i.e. `keyRecovery` at a
     set large enough that nothing is hidden. -/
 def rOf {s : Shape} (e : Expression s) : Finset (Expression Shape.KeyS) :=
@@ -1437,10 +1580,74 @@ lemma adversaryKeysIsFix {s : Shape} (e : Expression s) :
   := by
   apply greatestFixpointIsFixpoint
 
+/-- `adversaryKeys e` is closed under PRG derivation (inside the expression's universe).
+    This is one of the two facts LM18 Lemma 7's `Dup` case needs. -/
+lemma adversaryKeys_G0_closed {s : Shape} (e : Expression s) {k : Expression Shape.KeyS}
+    (hk : k ∈ adversaryKeys e) (hU : Expression.G0 k ∈ keySubterms e) :
+    Expression.G0 k ∈ adversaryKeys e := by
+  have hfix : keyRecovery e (adversaryKeys e) = adversaryKeys e := adversaryKeysIsFix e
+  have hk' : k ∈ keyRecovery e (adversaryKeys e) := by rw [hfix]; exact hk
+  have hres : Expression.G0 k ∈ keyRecovery e (adversaryKeys e) := by
+    simp only [keyRecovery] at hk' ⊢
+    exact G0_mem_prgClosure hk' hU
+  rwa [hfix] at hres
+
+lemma adversaryKeys_G1_closed {s : Shape} (e : Expression s) {k : Expression Shape.KeyS}
+    (hk : k ∈ adversaryKeys e) (hU : Expression.G1 k ∈ keySubterms e) :
+    Expression.G1 k ∈ adversaryKeys e := by
+  have hfix : keyRecovery e (adversaryKeys e) = adversaryKeys e := adversaryKeysIsFix e
+  have hk' : k ∈ keyRecovery e (adversaryKeys e) := by rw [hfix]; exact hk
+  have hres : Expression.G1 k ∈ keyRecovery e (adversaryKeys e) := by
+    simp only [keyRecovery] at hk' ⊢
+    exact G1_mem_prgClosure hk' hU
+  rwa [hfix] at hres
+
 def adversaryView {s : Shape} (e : Expression s) : Expression s :=
   hideEncrypted (adversaryKeys e) e
 
 -- To conclude, we connect parts (i), (ii), and (iii) and define symbolic indistinguishability.
+
+lemma prgClosure_keyRecovery {s : Shape} (e : Expression s) (S : Finset (Expression Shape.KeyS)) :
+    prgClosure (keySubterms e) (keyRecovery e S) = keyRecovery e S := by
+  simp only [keyRecovery]
+  exact prgClosure_idem _ _
+
+lemma adversaryKeys_prgClosed {s : Shape} (e : Expression s) :
+    prgClosure (keySubterms e) (adversaryKeys e) = adversaryKeys e := by
+  have hfix : keyRecovery e (adversaryKeys e) = adversaryKeys e := adversaryKeysIsFix e
+  conv_lhs => rw [← hfix]
+  rw [prgClosure_keyRecovery]
+  exact hfix
+
+lemma adversaryView_eq_hideEncrypted_closure {s : Shape} (e : Expression s) :
+    hideEncrypted (prgClosure (keySubterms e) (adversaryKeys e)) e = adversaryView e := by
+  rw [adversaryKeys_prgClosed]; rfl
+
+/-- `adversaryKeys e` also *reflects* derivation: a derived key is in it only because it is
+    directly recoverable from the adversary view, or because its seed is.  This is the other
+    fact LM18 Lemma 7's `Dup` case needs — Lemma 4 then kills the `extractKeys` branch and
+    Lemma 6(1) the ancestor branch. -/
+lemma adversaryKeys_reflects_G0 {s : Shape} (e : Expression s) {k : Expression Shape.KeyS}
+    (h : Expression.G0 k ∈ adversaryKeys e) :
+    Expression.G0 k ∈ extractKeys (adversaryView e) ∪ ancestorKeys (exprKeys (adversaryView e))
+      ∨ k ∈ adversaryKeys e := by
+  have hfix : keyRecovery e (adversaryKeys e) = adversaryKeys e := adversaryKeysIsFix e
+  have h' : Expression.G0 k ∈ keyRecovery e (adversaryKeys e) := by rw [hfix]; exact h
+  simp only [keyRecovery] at h'
+  rcases prgClosure_reflects_G0 h' with hb | hc
+  · left; rwa [adversaryView_eq_hideEncrypted_closure] at hb
+  · right; rw [← hfix]; simp only [keyRecovery]; exact hc
+
+lemma adversaryKeys_reflects_G1 {s : Shape} (e : Expression s) {k : Expression Shape.KeyS}
+    (h : Expression.G1 k ∈ adversaryKeys e) :
+    Expression.G1 k ∈ extractKeys (adversaryView e) ∪ ancestorKeys (exprKeys (adversaryView e))
+      ∨ k ∈ adversaryKeys e := by
+  have hfix : keyRecovery e (adversaryKeys e) = adversaryKeys e := adversaryKeysIsFix e
+  have h' : Expression.G1 k ∈ keyRecovery e (adversaryKeys e) := by rw [hfix]; exact h
+  simp only [keyRecovery] at h'
+  rcases prgClosure_reflects_G1 h' with hb | hc
+  · left; rwa [adversaryView_eq_hideEncrypted_closure] at hb
+  · right; rw [← hfix]; simp only [keyRecovery]; exact hc
 
 def symIndistinguishable {s : Shape} (e1 e2 : Expression s) : Prop :=
   ∃ (r : varRenaming), validVarRenaming r ∧
