@@ -151,9 +151,8 @@ def Lemma5 : Prop :=
   the IND-CPA reduction: (1) says no descendant of an encrypting key is ever visible, which
   is exactly the `seedFree` side condition of `symbolicToSemanticIndistinguishabilityHidingOneKey`.
 
-  **Condition (3) is proved** in `Lemma5.lean` (`PRG.lemma6_cond3`) — it comes out of the
-  same induction as Lemma 5.  Conditions (1) and (2) need their own induction, which can
-  now be run against `lemma5core`'s three outputs; they are still open.
+  **Proved**: condition (3) in `Lemma5.lean` (`PRG.lemma6_cond3`, from the same induction
+  as Lemma 5), conditions (1) and (2) in `Lemma6.lean`; `PRG.lemma6` assembles all three.
 -/
 def Lemma6 : Prop :=
   ∀ {s t : WireBundle} (c : Circuit s t) (u : labelType s) (ctr : ℕ),

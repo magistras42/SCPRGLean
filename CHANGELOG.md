@@ -3,6 +3,59 @@
 All notable changes to the proofs and code in this repository.
 Section numbers in brackets refer to [`PRGExtension-Analysis.md`](PRGExtension-Analysis.md).
 
+## [2026-09-16g] LM18 Lemma 6 proved
+
+Still `sorry`-free.
+
+### Added — `PRGExtension/Garbling/Lemma6.lean`
+
+**`lemma6` (LM18 Lemma 6) is proved.**  Conditions (1) and (2) by induction against
+`lemma5core`'s three outputs; condition (3) was already available from `Lemma5.lean`.
+
+Condition (1) — `𝖦⁺(k) ∩ Keys(C̃) = ∅` for every encryption key `k` — is exactly the
+`seedFree` side condition of `symbolicToSemanticIndistinguishabilityHidingOneKey`: the
+IND-CPA reduction never learns an encryption key, so it must never be asked to compute
+`prg0` of it.  The garbling scheme now provably satisfies it.
+
+Supporting lemmas:
+
+* `freshKey_not_in` and **`fresh_chain_contra`** — a fresh variable and an "old" key cannot
+  both sit in the chain of one key.  This is the workhorse of the `Compose` cases in both
+  directions, and it is where `keySubterms_linear` earns its keep;
+* `exprKeys_keyVarsBelow`, `encKeys_subset_exprKeys`;
+* `nand_exprKeys`, `nand_encKeys`, `nand_labelKeys` — one-off computations of the `NAnd`
+  table's key sets, hoisted out of the induction so the large `simp`s run once (inline they
+  blew the heartbeat limit).
+
+### Status of the garbling layer
+
+| obligation | status |
+|---|---|
+| `lemma4` | **proved** |
+| `Lemma5` | **proved** |
+| `Lemma6` | **proved** |
+| `Theorem4` | **proved** |
+| `Lemma7`, `Lemma8` | open — see below |
+| `Theorem5` | open |
+| `FixpointStepSound` | open |
+
+Lemmas 4–6 and Theorem 4 are pure key bookkeeping.  Lemmas 7 and 8 are a different kind of
+statement — they are where the symbolic invariants meet the greatest fixpoint — and they
+need machinery that does not exist yet:
+
+1. a membership characterisation for `prgClosure` (saturation, and "everything in the
+   closure is in the base or derived from it"), hence that `adversaryKeys e` is closed
+   under PRG derivation **and reflects it**.  The `Dup` case needs both directions: from
+   `k_z ∈ S` conclude `G0 k_z ∈ S`, and from `k_{1-z} ∉ S` conclude `G0 k_{1-z} ∉ S`;
+2. Lemma 4 lifted from `gb`'s output to the whole `Garble c x` expression (the `∉`
+   direction above goes through "a non-atomic key is never a *part*", then Lemma 6(1) rules
+   out the ancestor clause);
+3. lemmas connecting a `SubCircuit`'s garbling to the global one, so that facts about
+   `adversaryKeys (Garble c x)` can be applied at a sub-circuit.  `SubCircuit` is defined
+   but has no lemmas yet.
+
+---
+
 ## [2026-09-16f] LM18 Lemma 5 proved (with Lemma 6's condition (3))
 
 Still `sorry`-free.
