@@ -1,4 +1,4 @@
-import PRGExtension.Garbling.GarbleFixpoint
+import PRGExtension.Garbling.SymbolicHiding.GarbleProof
 open PRG
 -- a circuit ending in Dup: do the output-label keys occur in the expression at all?
 def e := Garble Circuit.DupC true

@@ -1,4 +1,4 @@
-import PRGExtension.Garbling.Independence
+import PRGExtension.Garbling.SymbolicHiding.Lemmas
 import PRGExtension.Expression.Lemmas.HideEncrypted
 open PRG
 

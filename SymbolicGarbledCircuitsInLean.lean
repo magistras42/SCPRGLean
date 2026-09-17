@@ -17,24 +17,6 @@ import PRGExtension.Expression.ComputationalSemantics.Soundness
 import PRGExtension.Expression.ComputationalSemantics.RenamePreserves
 
 -- PRG-based garbled circuits (LM18 §3-§5): definitions and the independence invariants.
-import PRGExtension.Garbling.Circuits
-import PRGExtension.Garbling.GarblingDef
-import PRGExtension.Garbling.Evaluation
-import PRGExtension.Garbling.Freshness
-import PRGExtension.Garbling.Independence
-import PRGExtension.Garbling.Correctness
-import PRGExtension.Garbling.Lemma5
-import PRGExtension.Garbling.Lemma6
-import PRGExtension.Garbling.GarbleKeys
-import PRGExtension.Garbling.GarbleFixpoint
-import PRGExtension.Garbling.GbStage
-import PRGExtension.Garbling.ViewKeys
-import PRGExtension.Garbling.Lemma7
-import PRGExtension.Garbling.Lemma8
-import PRGExtension.Garbling.ValueInvariant
-import PRGExtension.Garbling.Alignment
-import PRGExtension.Garbling.Theorem5
-import PRGExtension.Garbling.Security
 
 import VCVio2.ToMathlib.Control.MonadTransformer
 import VCVio2.VCVio.OracleComp.OracleComp
@@ -53,3 +35,14 @@ import VCVio2.VCVio.OracleComp.DistSemantics.EvalDist
 -- import SymbolicGarbledCircuitsInLean.Garbling.Correctness
 import PRGExtension.Expression.ComputationalSemantics.SoundnessProof.HidingOneKeyGen
 import PRGExtension.Expression.ComputationalSemantics.SoundnessProof.FixpointStep
+
+import PRGExtension.Garbling.Circuits
+import PRGExtension.Garbling.GarblingDef
+import PRGExtension.Garbling.Simulate
+import PRGExtension.Garbling.Correctness
+import PRGExtension.Garbling.SymbolicHiding.Lemmas
+import PRGExtension.Garbling.SymbolicHiding.GarbleProof
+import PRGExtension.Garbling.SymbolicHiding.GarbleHole
+import PRGExtension.Garbling.SymbolicHiding.SimulateProof
+import PRGExtension.Garbling.SymbolicHiding.GarbleHoleBitSwap
+import PRGExtension.Garbling.Security

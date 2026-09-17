@@ -1,29 +1,241 @@
-import PRGExtension.Garbling.Alignment
+import PRGExtension.Garbling.SymbolicHiding.SimulateProof
+import PRGExtension.Expression.Renamings
 
 /-!
-# LM18 Theorem 5
+# The renaming that maps garbling to simulation
 
-`Pattern(Garble(C,x)) ≈ Pattern(Simulate(C,C(x)))`.
+LM18 Theorem 5: `Pattern(Garble(C,x)) ≈ Pattern(Simulate(C,C(x)))`.
 
 The witness is `makeVarRenaming f`, where `f i` is the value carried by the wire whose label
-has bit index `i`.  It has to do two things at once:
+has bit index `i`.  It does two things at once:
 
 * the **key** half `makeKeySwap f` exchanges `K_{2i}` and `K_{2i+1}` exactly when wire `i`
-  carries `1`, so every label's *active* key (the one the garbling reveals) is sent to that
-  label's key `0` (the one the simulation reveals) — and because a label's two keys carry the
-  same `G`-prefix (`SwapCompatible`), this works under any number of `Dup`s;
-* the **bit** half `bitPerm f` negates `B_i` on exactly the same indices, which — via
-  `normalizeExpr`'s rule `π[¬b](p₀,p₁) ↝ π[b](p₁,p₀)` — moves the decryptable row of each
-  garbled table to position `(0,0)`, where the simulator's is.
+  carries `1`, sending each label's *active* key — the one the garbling reveals — to that
+  label's key `0`, which is the one the simulation reveals.  Because a label's two keys carry
+  the same `G`-prefix (`SwapCompatible`), this works under any number of `Dup`s;
+* the **bit** half `bitPerm f` negates `B_i` on the same indices, which via `normalizeExpr`'s
+  rule `π[¬b](p₀,p₁) ↝ π[b](p₁,p₀)` moves each garbled table's decryptable row to position
+  `(0,0)`, where the simulator's is.
 
-At a `NAnd` gate the two effects cancel exactly: row `(v_i,v_j)` carries `(¬B_h, K_h¹)` unless
-`(v_i,v_j) = (1,1)`, in which case it carries `(B_h, K_h⁰)`.  In the first case the output
-value is `1`, so `f` flips index `h`: `¬B_h ↦ ¬¬B_h ↝ B_h` and `K_h¹ ↦ K_h⁰`.  In the second
-the output value is `0` and `f` fixes index `h`.  Either way the row becomes `(B_h, K_h⁰)` —
-which is what `Sim` writes in *every* row.
+At a `NAnd` gate the two effects cancel exactly.  Row `(v_i,v_j)` carries `(¬B_h, K_h¹)`
+unless `(v_i,v_j) = (1,1)`, where it carries `(B_h, K_h⁰)`.  In the first case the gate's
+output is `1`, so `f` flips index `h`: `¬B_h ↦ ¬¬B_h ↝ B_h` and `K_h¹ ↦ K_h⁰`.  In the second
+the output is `0` and `f` fixes `h`.  Either way the row becomes `(B_h, K_h⁰)` — exactly what
+`Sim` writes in all four rows.
 -/
 
 namespace PRG
+
+/-! ## The key counter, independently of the labels -/
+def gbCtr : {s t : WireBundle} -> Circuit s t -> ℕ -> ℕ
+  | _, _, Circuit.NandC, ctr => ctr + 1
+  | _, _, Circuit.FirstC c _, ctr => gbCtr c ctr
+  | _, _, Circuit.ComposeC c1 c2, ctr => gbCtr c2 (gbCtr c1 ctr)
+  | _, _, Circuit.SwapC _ _, ctr => ctr
+  | _, _, Circuit.AssocC _ _ _, ctr => ctr
+  | _, _, Circuit.UnAssocC _ _ _, ctr => ctr
+  | _, _, Circuit.DupC, ctr => ctr
+theorem gb_ctr_eq : ∀ {s t : WireBundle} (c : Circuit s t) (u : labelType s) (ctr : ℕ),
+    (gb c u ctr).2.2 = gbCtr c ctr := by
+  intro s t c
+  induction c with
+  | SwapC a b => rintro ⟨i1, i2⟩ ctr; rfl
+  | AssocC a b d => rintro ⟨i1, i2, i3⟩ ctr; rfl
+  | UnAssocC a b d => rintro ⟨⟨i1, i2⟩, i3⟩ ctr; rfl
+  | DupC => intro l ctr; rfl
+  | NandC => rintro ⟨li, lj⟩ ctr; rfl
+  | FirstC c1 wb ih => rintro ⟨b1, b2⟩ ctr; exact ih b1 ctr
+  | ComposeC c1 c2 ih1 ih2 =>
+      intro b ctr
+      show (gb c2 (gb c1 b ctr).2.1 (gb c1 b ctr).2.2).2.2 = gbCtr c2 (gbCtr c1 ctr)
+      rw [ih2 _ _, ih1 b ctr]
+lemma gbCtr_mono : ∀ {s t : WireBundle} (c : Circuit s t) (ctr : ℕ), ctr ≤ gbCtr c ctr := by
+  intro s t c
+  induction c with
+  | SwapC a b => intro ctr; exact le_refl _
+  | AssocC a b d => intro ctr; exact le_refl _
+  | UnAssocC a b d => intro ctr; exact le_refl _
+  | DupC => intro ctr; exact le_refl _
+  | NandC => intro ctr; show ctr ≤ ctr + 1; omega
+  | FirstC c1 wb ih => intro ctr; exact ih ctr
+  | ComposeC c1 c2 ih1 ih2 => intro ctr; exact le_trans (ih1 ctr) (ih2 _)
+/-! ## Labels are swap-compatible
+
+Every label's two keys are `G^w(K_{2b})` and `G^w(K_{2b+1})` for the *same* `w` and for
+`b = l.bit`.  Rather than name `w`, we record the consequence Theorem 5 uses: the key
+renaming `makeKeySwap f` exchanges a label's two keys exactly when `f` flips the label's
+own bit index. -/
+def SwapCompatible (l : WireLabel) : Prop :=
+  ∀ f : ℕ → Bool,
+    applyKeyRenamingP (makeKeySwap f) l.key0 = cond (f l.bit) l.key1 l.key0 ∧
+    applyKeyRenamingP (makeKeySwap f) l.key1 = cond (f l.bit) l.key0 l.key1
+def SwapCompatibleB : {b : WireBundle} -> labelType b -> Prop
+  | WireBundle.SimpleB, l => SwapCompatible l
+  | WireBundle.PairB _ _, (l1, l2) => SwapCompatibleB l1 ∧ SwapCompatibleB l2
+lemma makeKeySwap_even (f : ℕ → Bool) (i : ℕ) :
+    makeKeySwap f (2*i) = if f i then 2*i+1 else 2*i := by
+  simp only [makeKeySwap, condNotNat, notNat, yesNat]
+  have h1 : 2*i/2 = i := by omega
+  have h2 : 2*i%2 = 0 := by omega
+  rw [h1, h2]
+  cases f i <;> simp
+lemma makeKeySwap_odd (f : ℕ → Bool) (i : ℕ) :
+    makeKeySwap f (2*i+1) = if f i then 2*i else 2*i+1 := by
+  simp only [makeKeySwap, condNotNat, notNat, yesNat]
+  have h1 : (2*i+1)/2 = i := by omega
+  have h2 : (2*i+1)%2 = 1 := by omega
+  rw [h1, h2]
+  cases f i <;> simp
+lemma swapCompatible_varK (i : ℕ) :
+    SwapCompatible ⟨i, Expression.VarK (2*i), Expression.VarK (2*i+1)⟩ := by
+  intro f
+  constructor <;>
+    · simp only [applyKeyRenamingP, makeKeySwap_even, makeKeySwap_odd]
+      cases f i <;> simp
+lemma swapCompatible_G0 {l : WireLabel} (h : SwapCompatible l) :
+    SwapCompatible ⟨l.bit, Expression.G0 l.key0, Expression.G0 l.key1⟩ := by
+  intro f
+  obtain ⟨h0, h1⟩ := h f
+  constructor <;>
+    · simp only [applyKeyRenamingP]
+      first | rw [h0] | rw [h1]
+      cases f l.bit <;> simp
+lemma swapCompatible_G1 {l : WireLabel} (h : SwapCompatible l) :
+    SwapCompatible ⟨l.bit, Expression.G1 l.key0, Expression.G1 l.key1⟩ := by
+  intro f
+  obtain ⟨h0, h1⟩ := h f
+  constructor <;>
+    · simp only [applyKeyRenamingP]
+      first | rw [h0] | rw [h1]
+      cases f l.bit <;> simp
+theorem gb_swapCompatible : ∀ {s t : WireBundle} (c : Circuit s t) (u : labelType s) (ctr : ℕ),
+    SwapCompatibleB u → SwapCompatibleB (gb c u ctr).2.1 := by
+  intro s t c
+  induction c with
+  | SwapC a b => rintro ⟨i1, i2⟩ ctr ⟨h1, h2⟩; exact ⟨h2, h1⟩
+  | AssocC a b d => rintro ⟨i1, i2, i3⟩ ctr ⟨h1, h2, h3⟩; exact ⟨⟨h1, h2⟩, h3⟩
+  | UnAssocC a b d => rintro ⟨⟨i1, i2⟩, i3⟩ ctr ⟨⟨h1, h2⟩, h3⟩; exact ⟨h1, h2, h3⟩
+  | DupC => intro l ctr h; exact ⟨swapCompatible_G0 h, swapCompatible_G1 h⟩
+  | NandC => rintro ⟨li, lj⟩ ctr _; exact swapCompatible_varK ctr
+  | FirstC c1 wb ih => rintro ⟨u1, u2⟩ ctr ⟨h1, h2⟩; exact ⟨ih u1 ctr h1, h2⟩
+  | ComposeC c1 c2 ih1 ih2 => intro u ctr h; exact ih2 _ _ (ih1 u ctr h)
+lemma makeLabels_swapCompatible : ∀ (b : WireBundle) (i : ℕ),
+    SwapCompatibleB (makeLabels b i).1
+  | WireBundle.SimpleB, i => swapCompatible_varK i
+  | WireBundle.PairB o1 o2, i =>
+      ⟨makeLabels_swapCompatible o1 i, makeLabels_swapCompatible o2 (makeLabels o1 i).2⟩
+/-! ## The wire-value assignment
+
+`f : ℕ → Bool` records, for each key-variable index, the value the corresponding wire
+carries.  Theorem 5's renaming is `makeVarRenaming f`.  Rather than reason about `f`
+globally, the main induction takes `AgreesOn f c v ctr` as a *structural* hypothesis, which
+`Compose` splits along the circuit — no freshness argument needed there.  Freshness enters
+only once, in `agreesOn_valueMap`, to see that the canonical `f` really does agree. -/
+def LabelValues (f : ℕ → Bool) : {b : WireBundle} -> labelType b -> bundleBool b -> Prop
+  | WireBundle.SimpleB, l, v => f l.bit = v
+  | WireBundle.PairB _ _, (l1, l2), (v1, v2) => LabelValues f l1 v1 ∧ LabelValues f l2 v2
+def AgreesOn (f : ℕ → Bool) : {s t : WireBundle} -> (c : Circuit s t) ->
+    bundleBool s -> ℕ -> Prop
+  | _, _, Circuit.NandC, (vi, vj), ctr => f ctr = !(vi && vj)
+  | _, _, Circuit.FirstC c _, (v1, _), ctr => AgreesOn f c v1 ctr
+  | _, _, Circuit.ComposeC c1 c2, v, ctr =>
+      AgreesOn f c1 v ctr ∧ AgreesOn f c2 (evalCircuit c1 v) (gbCtr c1 ctr)
+  | _, _, Circuit.SwapC _ _, _, _ => True
+  | _, _, Circuit.AssocC _ _ _, _, _ => True
+  | _, _, Circuit.UnAssocC _ _ _, _, _ => True
+  | _, _, Circuit.DupC, _, _ => True
+def valueMap : {s t : WireBundle} -> (c : Circuit s t) -> bundleBool s -> ℕ ->
+    (ℕ → Bool) -> (ℕ → Bool)
+  | _, _, Circuit.NandC, (vi, vj), ctr, f => Function.update f ctr (!(vi && vj))
+  | _, _, Circuit.FirstC c _, (v1, _), ctr, f => valueMap c v1 ctr f
+  | _, _, Circuit.ComposeC c1 c2, v, ctr, f =>
+      valueMap c2 (evalCircuit c1 v) (gbCtr c1 ctr) (valueMap c1 v ctr f)
+  | _, _, Circuit.SwapC _ _, _, _, f => f
+  | _, _, Circuit.AssocC _ _ _, _, _, f => f
+  | _, _, Circuit.UnAssocC _ _ _, _, _, f => f
+  | _, _, Circuit.DupC, _, _, f => f
+theorem valueMap_lt : ∀ {s t : WireBundle} (c : Circuit s t) (v : bundleBool s) (ctr : ℕ)
+    (f : ℕ → Bool) (m : ℕ), m < ctr → valueMap c v ctr f m = f m := by
+  intro s t c
+  induction c with
+  | SwapC a b => rintro ⟨v1, v2⟩ ctr f m _; rfl
+  | AssocC a b d => rintro ⟨v1, v2, v3⟩ ctr f m _; rfl
+  | UnAssocC a b d => rintro ⟨⟨v1, v2⟩, v3⟩ ctr f m _; rfl
+  | DupC => intro v ctr f m _; rfl
+  | NandC =>
+      rintro ⟨vi, vj⟩ ctr f m hm
+      show Function.update f ctr _ m = f m
+      exact Function.update_of_ne (by omega) _ _
+  | FirstC c1 wb ih => rintro ⟨v1, v2⟩ ctr f m hm; exact ih v1 ctr f m hm
+  | ComposeC c1 c2 ih1 ih2 =>
+      intro v ctr f m hm
+      show valueMap c2 _ (gbCtr c1 ctr) (valueMap c1 v ctr f) m = f m
+      rw [ih2 _ _ _ m (lt_of_lt_of_le hm (gbCtr_mono c1 ctr)), ih1 v ctr f m hm]
+theorem valueMap_ge : ∀ {s t : WireBundle} (c : Circuit s t) (v : bundleBool s) (ctr : ℕ)
+    (f : ℕ → Bool) (m : ℕ), gbCtr c ctr ≤ m → valueMap c v ctr f m = f m := by
+  intro s t c
+  induction c with
+  | SwapC a b => rintro ⟨v1, v2⟩ ctr f m _; rfl
+  | AssocC a b d => rintro ⟨v1, v2, v3⟩ ctr f m _; rfl
+  | UnAssocC a b d => rintro ⟨⟨v1, v2⟩, v3⟩ ctr f m _; rfl
+  | DupC => intro v ctr f m _; rfl
+  | NandC =>
+      rintro ⟨vi, vj⟩ ctr f m hm
+      have : ctr + 1 ≤ m := hm
+      show Function.update f ctr _ m = f m
+      exact Function.update_of_ne (by omega) _ _
+  | FirstC c1 wb ih => rintro ⟨v1, v2⟩ ctr f m hm; exact ih v1 ctr f m hm
+  | ComposeC c1 c2 ih1 ih2 =>
+      intro v ctr f m hm
+      have hm' : gbCtr c2 (gbCtr c1 ctr) ≤ m := hm
+      show valueMap c2 _ (gbCtr c1 ctr) (valueMap c1 v ctr f) m = f m
+      rw [ih2 _ _ _ m hm',
+        ih1 v ctr f m (le_trans (gbCtr_mono c2 (gbCtr c1 ctr)) hm')]
+/-- `AgreesOn` only looks at `f` inside the sub-circuit's own counter range. -/
+theorem agreesOn_congr : ∀ {s t : WireBundle} (c : Circuit s t) (v : bundleBool s) (ctr : ℕ)
+    (f g : ℕ → Bool), (∀ m, ctr ≤ m → m < gbCtr c ctr → f m = g m) →
+    AgreesOn f c v ctr → AgreesOn g c v ctr := by
+  intro s t c
+  induction c with
+  | SwapC a b => rintro ⟨v1, v2⟩ ctr f g _ _; trivial
+  | AssocC a b d => rintro ⟨v1, v2, v3⟩ ctr f g _ _; trivial
+  | UnAssocC a b d => rintro ⟨⟨v1, v2⟩, v3⟩ ctr f g _ _; trivial
+  | DupC => intro v ctr f g _ _; trivial
+  | NandC =>
+      rintro ⟨vi, vj⟩ ctr f g h ha
+      show g ctr = _
+      rw [← h ctr (le_refl _) (by show ctr < ctr + 1; omega)]
+      exact ha
+  | FirstC c1 wb ih => rintro ⟨v1, v2⟩ ctr f g h ha; exact ih v1 ctr f g h ha
+  | ComposeC c1 c2 ih1 ih2 =>
+      intro v ctr f g h ⟨ha1, ha2⟩
+      have hb1 := gbCtr_mono c1 ctr
+      have hb2 := gbCtr_mono c2 (gbCtr c1 ctr)
+      have h' : ∀ m, ctr ≤ m → m < gbCtr c2 (gbCtr c1 ctr) → f m = g m := h
+      exact ⟨ih1 v ctr f g (fun m h1 h2 => h' m h1 (by omega)) ha1,
+        ih2 _ _ f g (fun m h1 h2 => h' m (by omega) h2) ha2⟩
+/-- The canonical assignment agrees with the circuit it was built from. -/
+theorem agreesOn_valueMap : ∀ {s t : WireBundle} (c : Circuit s t) (v : bundleBool s)
+    (ctr : ℕ) (f : ℕ → Bool), AgreesOn (valueMap c v ctr f) c v ctr := by
+  intro s t c
+  induction c with
+  | SwapC a b => rintro ⟨v1, v2⟩ ctr f; trivial
+  | AssocC a b d => rintro ⟨v1, v2, v3⟩ ctr f; trivial
+  | UnAssocC a b d => rintro ⟨⟨v1, v2⟩, v3⟩ ctr f; trivial
+  | DupC => intro v ctr f; trivial
+  | NandC =>
+      rintro ⟨vi, vj⟩ ctr f
+      show Function.update f ctr _ ctr = _
+      simp
+  | FirstC c1 wb ih => rintro ⟨v1, v2⟩ ctr f; exact ih v1 ctr f
+  | ComposeC c1 c2 ih1 ih2 =>
+      intro v ctr f
+      refine ⟨?_, ih2 _ _ _⟩
+      refine agreesOn_congr c1 v ctr (valueMap c1 v ctr f) _ ?_ (ih1 v ctr f)
+      intro m _ h2
+      exact (valueMap_lt c2 _ (gbCtr c1 ctr) (valueMap c1 v ctr f) m h2).symm
+
+/-! ## Theorem 5 -/
 
 /-- The shape both sides normalise to at a `NAnd` gate: the decryptable row is at position
     `(0,0)` and carries `(B_h, K_h⁰)`; the sibling row is an `Enc`/`Hidden`; the two rows
@@ -40,7 +252,6 @@ def nandPattern (li lj : WireLabel) (n : ℕ) :
       (Expression.Enc li.key0 (Expression.Hidden lj.key1)))
     (Expression.Perm (Expression.BitE lj.bitE)
       (Expression.Hidden li.key1) (Expression.Hidden li.key1))
-
 lemma nand_pattern_sim (T : Finset (Expression Shape.KeyS)) (li lj : WireLabel) (n : ℕ)
     (hi1 : li.key0 ∈ T) (hi0 : li.key1 ∉ T)
     (hj1 : lj.key0 ∈ T) (hj0 : lj.key1 ∉ T) :
@@ -48,7 +259,6 @@ lemma nand_pattern_sim (T : Finset (Expression Shape.KeyS)) (li lj : WireLabel) 
       = nandPattern li lj n := by
   simp only [sim, gbEntry, hideEncrypted, hideEncrypted_key, normalizeExpr, normalizeB,
     nandPattern, WireLabel.bitE, hi1, hi0, hj1, hj0, if_true, if_false, reduceIte]
-
 lemma nand_pattern_gb (S : Finset (Expression Shape.KeyS)) (li lj : WireLabel) (n : ℕ)
     (f : ℕ → Bool) (vi vj : Bool)
     (hfi : f li.bit = vi) (hfj : f lj.bit = vj) (hfn : f n = !(vi && vj))
@@ -70,7 +280,6 @@ lemma nand_pattern_gb (S : Finset (Expression Shape.KeyS)) (li lj : WireLabel) (
       varOrNegVarToExpr, normalizeExpr, normalizeB, nandPattern, WireLabel.bitE,
       hi1, hi0, hj1, hj0, hri0, hri1, hrj0, hrj1, hfi, hfj, hfn,
       makeKeySwap_even, makeKeySwap_odd]
-
 theorem theorem5_core {s t : WireBundle} (c : Circuit s t) (x : bundleBool s) (f : ℕ → Bool) :
     ∀ {s' t' : WireBundle} (c' : Circuit s' t') (u' : labelType s') (ctr' : ℕ)
       (v : bundleBool s'),
@@ -142,16 +351,13 @@ theorem theorem5_core {s t : WireBundle} (c : Circuit s t) (x : bundleBool s) (f
         sim_snd_fst, sim_snd_snd]
       simp only [applyVarRenaming] at heq1 heq2
       rw [heq1, heq2]
-
 /-- The keys the input encoding reveals, and the ones it withholds. -/
 def selKeys : {b : WireBundle} -> labelType b -> bundleBool b -> Finset (Expression Shape.KeyS)
   | WireBundle.SimpleB, l, v => {cond v l.key1 l.key0}
   | WireBundle.PairB _ _, (l1, l2), (v1, v2) => selKeys l1 v1 ∪ selKeys l2 v2
-
 def unselKeys : {b : WireBundle} -> labelType b -> bundleBool b -> Finset (Expression Shape.KeyS)
   | WireBundle.SimpleB, l, v => {cond v l.key0 l.key1}
   | WireBundle.PairB _ _, (l1, l2), (v1, v2) => unselKeys l1 v1 ∪ unselKeys l2 v2
-
 lemma selKeys_subset : ∀ {b : WireBundle} (u : labelType b) (v : bundleBool b),
     selKeys u v ⊆ labelKeys u
   | WireBundle.SimpleB, l, v => by
@@ -159,7 +365,6 @@ lemma selKeys_subset : ∀ {b : WireBundle} (u : labelType b) (v : bundleBool b)
   | WireBundle.PairB o1 o2, (l1, l2), (v1, v2) => by
       simp only [selKeys, labelKeys]
       exact Finset.union_subset_union (selKeys_subset l1 v1) (selKeys_subset l2 v2)
-
 lemma unselKeys_subset : ∀ {b : WireBundle} (u : labelType b) (v : bundleBool b),
     unselKeys u v ⊆ labelKeys u
   | WireBundle.SimpleB, l, v => by
@@ -167,7 +372,6 @@ lemma unselKeys_subset : ∀ {b : WireBundle} (u : labelType b) (v : bundleBool 
   | WireBundle.PairB o1 o2, (l1, l2), (v1, v2) => by
       simp only [unselKeys, labelKeys]
       exact Finset.union_subset_union (unselKeys_subset l1 v1) (unselKeys_subset l2 v2)
-
 /-- Distinct labels never hide a key they also reveal. -/
 lemma unsel_notMem_sel : ∀ {b : WireBundle} (u : labelType b) (v : bundleBool b),
     DistinctLabels u → ∀ k ∈ unselKeys u v, k ∉ selKeys u v
@@ -185,7 +389,6 @@ lemma unsel_notMem_sel : ∀ {b : WireBundle} (u : labelType b) (v : bundleBool 
         exact mem_of_inter_empty hdisj (unselKeys_subset l1 v1 hk) (selKeys_subset l2 v2 hc)
       · refine ⟨fun hc => ?_, unsel_notMem_sel l2 v2 d2 k hk⟩
         exact mem_of_inter_empty hdisj (selKeys_subset l1 v1 hc) (unselKeys_subset l2 v2 hk)
-
 /-- The encoded input reveals exactly the selected keys. -/
 lemma extractKeys_view_gEnc_eq (S : Finset (Expression Shape.KeyS)) :
     ∀ {b : WireBundle} (u : labelType b) (x : bundleBool b),
@@ -198,7 +401,6 @@ lemma extractKeys_view_gEnc_eq (S : Finset (Expression Shape.KeyS)) :
   | WireBundle.PairB o1 o2, (l1, l2), (x1, x2) => by
       simp only [gEnc, encodedLabelToExpr, hideEncrypted, extractKeys, selKeys,
         extractKeys_view_gEnc_eq S l1 x1, extractKeys_view_gEnc_eq S l2 x2]
-
 /-- Assemble `LabelValueIn` from the two global facts about the whole label bundle. -/
 lemma labelValueIn_of (U S : Finset (Expression Shape.KeyS)) :
     ∀ {b : WireBundle} (u : labelType b) (x : bundleBool b),
@@ -212,17 +414,14 @@ lemma labelValueIn_of (U S : Finset (Expression Shape.KeyS)) :
           (fun k hk => hu k (Finset.mem_union_left _ hk)),
         labelValueIn_of U S l2 x2 (fun k hk => hs k (Finset.mem_union_right _ hk))
           (fun k hk => hu k (Finset.mem_union_right _ hk))⟩
-
 def zeroBundle : (b : WireBundle) -> bundleBool b
   | WireBundle.SimpleB => false
   | WireBundle.PairB b1 b2 => (zeroBundle b1, zeroBundle b2)
-
 lemma sEnc_eq_gEnc : ∀ {b : WireBundle} (u : labelType b),
     sEnc u = gEnc u (zeroBundle b)
   | WireBundle.SimpleB, l => rfl
   | WireBundle.PairB o1 o2, (l1, l2) => by
       simp only [sEnc, gEnc, zeroBundle, sEnc_eq_gEnc l1, sEnc_eq_gEnc l2]
-
 lemma labelZeroIn_of (U T : Finset (Expression Shape.KeyS)) :
     ∀ {b : WireBundle} (u : labelType b),
       (∀ k ∈ selKeys u (zeroBundle b), k ∈ T) →
@@ -236,7 +435,6 @@ lemma labelZeroIn_of (U T : Finset (Expression Shape.KeyS)) :
           (fun k hk => hu k (Finset.mem_union_left _ hk)),
         labelZeroIn_of U T l2 (fun k hk => hs k (Finset.mem_union_right _ hk))
           (fun k hk => hu k (Finset.mem_union_right _ hk))⟩
-
 /-- The input encoding really does reveal one key of each input wire … -/
 theorem input_sel_mem {s t : WireBundle} (c : Circuit s t) (x : bundleBool s) :
     ∀ k ∈ selKeys (makeLabels s 0).1 x, k ∈ adversaryKeys (Garble c x) := by
@@ -246,7 +444,6 @@ theorem input_sel_mem {s t : WireBundle} (c : Circuit s t) (x : bundleBool s) :
   right
   rw [extractKeys_view_gEnc_eq]
   exact hk
-
 /-- … and withholds the other. -/
 theorem input_unsel_notMem {s t : WireBundle} (c : Circuit s t) (x : bundleBool s) :
     ∀ k ∈ unselKeys (makeLabels s 0).1 x, k ∉ adversaryKeys (Garble c x) := by
@@ -263,7 +460,6 @@ theorem input_unsel_notMem {s t : WireBundle} (c : Circuit s t) (x : bundleBool 
     omega
   · rw [extractKeys_view_gEnc_eq] at h1
     exact unsel_notMem_sel _ x (makeLabels_stronglyIndependent s 0).2 k hk h1
-
 theorem input_sel_mem_sim {s t : WireBundle} (c : Circuit s t) (y : bundleBool t) :
     ∀ k ∈ selKeys (makeLabels s 0).1 (zeroBundle s), k ∈ adversaryKeys (Simulate c y) := by
   intro k hk
@@ -272,7 +468,6 @@ theorem input_sel_mem_sim {s t : WireBundle} (c : Circuit s t) (y : bundleBool t
   right
   rw [sEnc_eq_gEnc, extractKeys_view_gEnc_eq]
   exact hk
-
 theorem input_unsel_notMem_sim {s t : WireBundle} (c : Circuit s t) (y : bundleBool t) :
     ∀ k ∈ unselKeys (makeLabels s 0).1 (zeroBundle s), k ∉ adversaryKeys (Simulate c y) := by
   intro k hk hcon
@@ -288,12 +483,10 @@ theorem input_unsel_notMem_sim {s t : WireBundle} (c : Circuit s t) (y : bundleB
     omega
   · rw [sEnc_eq_gEnc, extractKeys_view_gEnc_eq] at h1
     exact unsel_notMem_sel _ _ (makeLabels_stronglyIndependent s 0).2 k hk h1
-
 def inputValues : {b : WireBundle} -> labelType b -> bundleBool b ->
     (ℕ → Bool) -> (ℕ → Bool)
   | WireBundle.SimpleB, l, v, g => Function.update g l.bit v
   | WireBundle.PairB _ _, (l1, l2), (v1, v2), g => inputValues l2 v2 (inputValues l1 v1 g)
-
 lemma inputValues_lt : ∀ (b : WireBundle) (i : ℕ) (x : bundleBool b) (g : ℕ → Bool) (m : ℕ),
     m < i → inputValues (makeLabels b i).1 x g m = g m
   | WireBundle.SimpleB, i, x, g, m, hm => by
@@ -304,7 +497,6 @@ lemma inputValues_lt : ∀ (b : WireBundle) (i : ℕ) (x : bundleBool b) (g : �
       show inputValues (makeLabels o2 (makeLabels o1 i).2).1 x2
         (inputValues (makeLabels o1 i).1 x1 g) m = g m
       rw [inputValues_lt o2 _ x2 _ m (by omega), inputValues_lt o1 i x1 g m hm]
-
 lemma inputValues_ge : ∀ (b : WireBundle) (i : ℕ) (x : bundleBool b) (g : ℕ → Bool) (m : ℕ),
     (makeLabels b i).2 ≤ m → inputValues (makeLabels b i).1 x g m = g m
   | WireBundle.SimpleB, i, x, g, m, hm => by
@@ -317,7 +509,6 @@ lemma inputValues_ge : ∀ (b : WireBundle) (i : ℕ) (x : bundleBool b) (g : �
       show inputValues (makeLabels o2 (makeLabels o1 i).2).1 x2
         (inputValues (makeLabels o1 i).1 x1 g) m = g m
       rw [inputValues_ge o2 _ x2 _ m hm', inputValues_ge o1 i x1 g m (by omega)]
-
 lemma labelValues_congr : ∀ (b : WireBundle) (i : ℕ) (x : bundleBool b) (f g : ℕ → Bool),
     (∀ m, i ≤ m → m < (makeLabels b i).2 → f m = g m) →
     LabelValues f (makeLabels b i).1 x → LabelValues g (makeLabels b i).1 x
@@ -330,7 +521,6 @@ lemma labelValues_congr : ∀ (b : WireBundle) (i : ℕ) (x : bundleBool b) (f g
       have h' : ∀ m, i ≤ m → m < (makeLabels o2 (makeLabels o1 i).2).2 → f m = g m := h
       exact ⟨labelValues_congr o1 i x1 f g (fun m ha hb => h' m ha (by omega)) hl1,
         labelValues_congr o2 _ x2 f g (fun m ha hb => h' m (by omega) hb) hl2⟩
-
 lemma labelValues_inputValues : ∀ (b : WireBundle) (i : ℕ) (x : bundleBool b) (g : ℕ → Bool),
     LabelValues (inputValues (makeLabels b i).1 x g) (makeLabels b i).1 x
   | WireBundle.SimpleB, i, x, g => by show Function.update g i x i = x; simp
@@ -340,9 +530,7 @@ lemma labelValues_inputValues : ∀ (b : WireBundle) (i : ℕ) (x : bundleBool b
         (labelValues_inputValues o1 i x1 g)
       intro m _ hb
       exact (inputValues_lt o2 (makeLabels o1 i).2 x2 _ m hb).symm
-
 /-! ## The encoded input and the output masks -/
-
 lemma view_gEnc_eq (S T : Finset (Expression Shape.KeyS)) (f : ℕ → Bool) :
     ∀ {b : WireBundle} (u : labelType b) (x : bundleBool b),
       LabelValues f u x → SwapCompatibleB u →
@@ -365,7 +553,6 @@ lemma view_gEnc_eq (S T : Finset (Expression Shape.KeyS)) (f : ℕ → Bool) :
       have e2 := view_gEnc_eq S T f l2 x2 hv2 hs2
       simp only [applyVarRenaming] at e1 e2
       rw [e1, e2]
-
 lemma view_mask_eq (S T : Finset (Expression Shape.KeyS)) (f : ℕ → Bool) :
     ∀ {b : WireBundle} (w : labelType b) (y : bundleBool b), LabelValues f w y →
       normalizeExpr (applyVarRenaming (makeVarRenaming f)
@@ -384,9 +571,7 @@ lemma view_mask_eq (S T : Finset (Expression Shape.KeyS)) (f : ℕ → Bool) :
       have e2 := view_mask_eq S T f l2 y2 hv2
       simp only [applyVarRenaming] at e1 e2
       rw [e1, e2]
-
 /-! ## Theorem 5 -/
-
 theorem theorem5 : Theorem5 := by
   intro s t c x
   refine ⟨makeVarRenaming (valueMap c x (makeLabels s 0).2

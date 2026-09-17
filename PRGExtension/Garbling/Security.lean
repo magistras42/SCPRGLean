@@ -1,4 +1,4 @@
-import PRGExtension.Garbling.Theorem5
+import PRGExtension.Garbling.SymbolicHiding.GarbleHoleBitSwap
 import PRGExtension.Expression.ComputationalSemantics.Soundness
 
 /-!

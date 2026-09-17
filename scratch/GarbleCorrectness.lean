@@ -1,4 +1,4 @@
-import PRGExtension.Garbling.Evaluation
+import PRGExtension.Garbling.GarblingDef
 open PRG
 
 -- LM18 Theorem 4 checked by evaluation on small circuits.  `notC`, `andC` and `orC` all

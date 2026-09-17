@@ -3,6 +3,45 @@
 All notable changes to the proofs and code in this repository.
 Section numbers in brackets refer to [`PRGExtension-Analysis.md`](PRGExtension-Analysis.md).
 
+## [2026-09-17b] — `PRGExtension/Garbling` restructured to mirror the original
+
+Pure refactor: files moved and merged, **no proof changed**.  The declaration set is
+identical before and after (263 declarations, verified by diff), the build is clean and
+`sorry`-free, and axiom footprints are unchanged.
+
+`PRGExtension/Garbling` now has exactly the file and folder layout of
+`SymbolicGarbledCircuitsInLean/Garbling`, with content assigned by the same roles:
+
+| File | Was |
+|---|---|
+| `Circuits.lean` | `Circuits.lean` (unchanged) |
+| `GarblingDef.lean` | `GarblingDef.lean` (garbling half) + `Evaluation.lean` — as in the original, `GEval` lives with the scheme definition |
+| `Simulate.lean` | the `sim` / `SEnc` / `SMask` / `Simulate` half of `GarblingDef.lean` |
+| `Correctness.lean` | `Correctness.lean` (unchanged) |
+| `SymbolicHiding/Lemmas.lean` | `Freshness.lean` + `Independence.lean` + `GbStage.lean` + the `LabelValueIn` / `LabelZeroIn` definitions |
+| `SymbolicHiding/GarbleProof.lean` | `Lemma5.lean` + `Lemma6.lean` + `GarbleKeys.lean` (garbling side) + `GarbleFixpoint.lean` + `GbStage.hyps` / `GbStage.labelKeys_yielded` |
+| `SymbolicHiding/GarbleHole.lean` | `ViewKeys.lean` + `Lemma7.lean` + `lemma7_value` |
+| `SymbolicHiding/SimulateProof.lean` | `GarbleKeys.lean` (simulator side) + `Lemma8.lean` + `lemma8_zero` |
+| `SymbolicHiding/GarbleHoleBitSwap.lean` | `Alignment.lean` + `Theorem5.lean` |
+| `Security.lean` | `Security.lean` (unchanged) |
+
+The roles line up with the original's: `Lemmas.lean` is shared bookkeeping, `GarbleProof`
+characterises `adversaryKeys` of the garbled circuit, `GarbleHole` characterises its
+`adversaryView`, `SimulateProof` does both for the simulated circuit reusing the garbling
+work, and `GarbleHoleBitSwap` is the renaming that maps garbling to simulation.
+
+Two placements are forced by dependencies rather than by role, and are noted in the files:
+
+* `GbStage.hyps` and `GbStage.labelKeys_yielded` use `lemma5core`, so they sit in
+  `GarbleProof.lean` while the rest of `GbStage` (including the `Lemma7` / `Lemma8` /
+  `Theorem5` statements) is in `Lemmas.lean`.
+* `Simulate.lean` comes *before* `SymbolicHiding/` here, whereas the original imports it
+  after `GarbleHole.lean`.  `sim_snd_eq_gb_snd` — which is what lets one `GbStage` relation
+  serve both Lemmas 7 and 8 — needs `sim`, so the simulator has to be defined first.
+
+Each new module carries a docstring explaining its role; stale cross-file references in
+comments were updated, as were the three `scratch/` files that imported removed modules.
+
 ## [2026-09-17a] — **`FixpointStepSound` proved; the framework has no remaining obligations**
 
 `fixpointStepSound` is a theorem, so `symbolicToSemanticSoundness` (LM18 Theorem 1 for the

@@ -1,10 +1,10 @@
-import PRGExtension.Garbling.Evaluation
+import PRGExtension.Garbling.GarblingDef
 
 /-!
-# LM18 Theorem 4: correctness of the PRG-based garbling scheme
+# Correctness of the garbling scheme
 
-`GEval(C, Garble(C,x)) = C(x)`.  Ported from the encryption-only framework; the new case
-is `Dup`, where both `Gb` and `GEv` apply the PRG and have to agree.
+`garbleCorrect`: evaluating `Garble(C, x)` symbolically returns `C(x)`.  This is LM18
+Theorem 4 (`theorem4_holds`).
 -/
 
 namespace PRG
@@ -13,12 +13,10 @@ lemma parseEncodedBundleCorrect {u : WireBundle} (x : encodedLabelType u) :
     parseEncodedBundle (encodedLabelToExpr x) = some x := by
   induction u <;> try (simp at x; simp [parseEncodedBundle, encodedLabelToExpr, extractPair])
   case PairB v w Hv Hw => simp [Hv, Hw]
-
 lemma parseMaskedBundleCorrect {u : WireBundle} (x : maskedLabelType u) :
     parseMaskedBundle (maskedLabelToExpr x) = some x := by
   induction u <;> (simp at x; simp [parseMaskedBundle, maskedLabelToExpr, extractPair])
   case PairB v w Hv Hw => simp [Hv, Hw]
-
 /-- Evaluating the garbled circuit on the encoded input yields the encoded output. -/
 lemma gEvCorrect {input output : WireBundle} (c : Circuit input output)
     (inlbl : labelType input) (i : ℕ) (inputVal : bundleBool input) :
@@ -40,7 +38,6 @@ lemma gEvCorrect {input output : WireBundle} (c : Circuit input output)
   case FirstC v w c u Hc =>
     simp [gb, gEv, evalCircuit, gEnc, Hc]
   repeat simp [gb, gEv, evalCircuit, gEnc]
-
 lemma decodeCorrect {bundle : WireBundle} (output : bundleBool bundle) (lbl : labelType bundle) :
     decode (gEnc lbl output) (gMask lbl) = some output := by
   induction bundle
@@ -52,7 +49,6 @@ lemma decodeCorrect {bundle : WireBundle} (output : bundleBool bundle) (lbl : la
   case PairB u v Hu Hv =>
     simp at lbl output
     simp [gEnc, gMask, decode, Hu, Hv]
-
 /-- **LM18 Theorem 4.** -/
 theorem garbleCorrect {s t : WireBundle} (c : Circuit s t) (input : bundleBool s) :
     testGarbleEval c input = some (evalCircuit c input) := by
@@ -66,7 +62,6 @@ theorem garbleCorrect {s t : WireBundle} (c : Circuit s t) (input : bundleBool s
   simp at this
   rw [this]
   simp [decodeCorrect]
-
 /-- `Theorem4` (the named obligation) is discharged. -/
 theorem theorem4_holds : Theorem4 := fun c x => garbleCorrect c x
 
