@@ -3,6 +3,46 @@
 All notable changes to the proofs and code in this repository.
 Section numbers in brackets refer to [`PRGExtension-Analysis.md`](PRGExtension-Analysis.md).
 
+## [2026-09-16h] `prgClosure` saturation; `adversaryKeys` derivation properties
+
+Still `sorry`-free.  This closes **item 1** of the three things Lemmas 7/8 need.
+
+### Added — the bounded `prgClosure` is a genuine closure
+
+`prgStep_prgClosure : prgStep U (prgClosure U S) = prgClosure U S`.
+
+The proof is the counting argument the definition was designed around but never justified:
+each non-stabilising step adds at least one element of the universe
+(`prgStep_card_growth`), so the fold stabilises within `|U|` steps
+(`exists_prgStep_stable`) and then stays put (`prgStep_stable`).  This was flagged as a gap
+in PRGExtension-Analysis.md §4.6 ("worth recording a lemma … so the closure can be reasoned
+about as a closure rather than as a fold") and is now closed.
+
+Also `prgClosure_idem`, `iterate_of_stable`.
+
+### Added — `adversaryKeys` is closed under derivation, and reflects it
+
+Both directions, which is exactly what LM18 Lemma 7's `Dup` case needs:
+
+* **closed**: `G0_mem_prgClosure`, `G1_mem_prgClosure`, and
+  `adversaryKeys_G0_closed`, `adversaryKeys_G1_closed` — from `k ∈ S` conclude `G0 k ∈ S`
+  (within the expression's universe).  This is the `k_z ∈ S ⟹ G0 k_z ∈ S` half.
+* **reflects**: `prgClosure_reflects_G0/G1` and `adversaryKeys_reflects_G0/G1` — `G0 k ∈ S`
+  only because `G0 k` is directly recoverable from the adversary view, or because `k ∈ S`.
+  This is the `k_{1-z} ∉ S ⟹ G0 k_{1-z} ∉ S` half: Lemma 4 will kill the `extractKeys`
+  branch (a non-atomic key is never a *part*) and Lemma 6(1) the ancestor branch.
+
+Supporting: `prgClosure_keyRecovery`, `adversaryKeys_prgClosed`, and
+`adversaryView_eq_hideEncrypted_closure`, which identifies
+`hideEncrypted (prgClosure U (adversaryKeys e)) e` with `adversaryView e`.
+
+### Remaining for Lemmas 7/8
+
+2. Lemma 4 lifted from `gb`'s output to the whole `Garble c x` expression.
+3. Lemmas connecting a `SubCircuit`'s garbling to the global one.
+
+---
+
 ## [2026-09-16g] LM18 Lemma 6 proved
 
 Still `sorry`-free.

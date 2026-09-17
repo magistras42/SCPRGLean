@@ -445,9 +445,9 @@ as such in the source. Nothing else in the library depends on it.
 * `allParts` now recurses into `G0`/`G1` ([HideEncrypted.lean:38-45](PRGExtension/Expression/Lemmas/HideEncrypted.lean#L38-L45))
   and so has become a fourth key-extraction function that nearly duplicates `keySubterms`. After §4.1, check
   whether `allParts` can simply *be* `keySubterms` and delete one of them.
-* `prgClosure` iterates `univKeys.card + 1` times. That bound is correct (each non-stabilising step adds an
-  element of `univKeys`), but it is worth recording a lemma `prgStep U (prgClosure U S) = prgClosure U S` so
-  the closure can be reasoned about as a closure rather than as a fold.
+* ~~`prgClosure` iterates `univKeys.card + 1` times … worth recording a lemma
+  `prgStep U (prgClosure U S) = prgClosure U S`~~ — **done** (`prgStep_prgClosure`), together with the
+  reflection direction `prgClosure_reflects_G0/G1` and the `adversaryKeys` corollaries.
 
 ---
 
