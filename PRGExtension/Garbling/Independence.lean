@@ -66,6 +66,31 @@ def LabelInvariant (S : Finset (Expression Shape.KeyS)) :
       (l.key0 ∈ S ∧ l.key1 ∉ S) ∨ (l.key1 ∈ S ∧ l.key0 ∉ S)
   | WireBundle.PairB _ _, (l1, l2) => LabelInvariant S l1 ∧ LabelInvariant S l2
 
+/--
+  The label invariant **relativised to the keys that actually occur**.
+
+  This is needed because the library's `prgClosure` is bounded by the expression's own key
+  subterms, whereas LM18's `𝖦*` is unbounded (`𝖦*(S) = {𝖦ʷ(k) | k ∈ S, w ∈ {0,1}*}`,
+  Definition 3).  The bounding is sound for computing the *pattern* — `p(e,S)` only ever
+  tests keys occurring in `e` — but it changes membership for keys that do not occur, and
+  the unrelativised invariant quantifies over exactly those.
+
+  Concretely (`scratch/DupTrailing.lean`): for `Garble Dup true` the whole expression has
+  key set `{K₁}`, while the output labels are `(b,(G0 K₀, G0 K₁))` and `(b,(G1 K₀, G1 K₁))`.
+  In LM18, `S = 𝖦*({K₁} ∪ …)` contains `G0 K₁` but not `G0 K₀`, so exactly one of the pair
+  is in `S` and the invariant holds.  With the bounded closure `G0 K₁ ∉ S` either, so
+  *neither* is in `S` and the invariant fails.
+
+  LM18 only ever uses Lemma 7 for labels that are actually used (as encryption keys at a
+  later gate), so relativising is faithful and is what makes the statement provable here.
+-/
+def LabelInvariantIn (U S : Finset (Expression Shape.KeyS)) :
+    {b : WireBundle} -> labelType b -> Prop
+  | WireBundle.SimpleB, l =>
+      (l.key0 ∈ U ∨ l.key1 ∈ U) →
+      ((l.key0 ∈ S ∧ l.key1 ∉ S) ∨ (l.key1 ∈ S ∧ l.key0 ∉ S))
+  | WireBundle.PairB _ _, (l1, l2) => LabelInvariantIn U S l1 ∧ LabelInvariantIn U S l2
+
 /-- LM18 writes `(C̃, u)` for a garbled circuit paired with its input label expression. -/
 def garbledWithLabels {s t : WireBundle} (c : Circuit s t)
     (ctilde : Expression (garbledShape c)) (u : labelType s) :
@@ -187,8 +212,8 @@ def Lemma7 : Prop :=
   ∀ {s t : WireBundle} (c : Circuit s t) (x : bundleBool s),
     ∀ {s' t' : WireBundle} (c' : Circuit s' t'), SubCircuit c' c →
     ∀ (u : labelType s') (ctr : ℕ),
-      LabelInvariant (adversaryKeys (Garble c x)) u →
-      LabelInvariant (adversaryKeys (Garble c x)) (gb c' u ctr).2.1
+      LabelInvariantIn (keySubterms (Garble c x)) (adversaryKeys (Garble c x)) u →
+      LabelInvariantIn (keySubterms (Garble c x)) (adversaryKeys (Garble c x)) (gb c' u ctr).2.1
 
 /--
   **LM18 Lemma 8.**  The same for the simulator, with `T = Fix(𝓕_f)` for
@@ -199,8 +224,8 @@ def Lemma8 : Prop :=
   ∀ {s t : WireBundle} (c : Circuit s t) (y : bundleBool t),
     ∀ {s' t' : WireBundle} (c' : Circuit s' t'), SubCircuit c' c →
     ∀ (u : labelType s') (ctr : ℕ),
-      LabelInvariant (adversaryKeys (Simulate c y)) u →
-      LabelInvariant (adversaryKeys (Simulate c y)) (sim c' u ctr).2.1
+      LabelInvariantIn (keySubterms (Simulate c y)) (adversaryKeys (Simulate c y)) u →
+      LabelInvariantIn (keySubterms (Simulate c y)) (adversaryKeys (Simulate c y)) (sim c' u ctr).2.1
 
 /--
   **LM18 Theorem 5**, the goal these lemmas serve:

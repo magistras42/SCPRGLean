@@ -3,6 +3,62 @@
 All notable changes to the proofs and code in this repository.
 Section numbers in brackets refer to [`PRGExtension-Analysis.md`](PRGExtension-Analysis.md).
 
+## [2026-09-16i] Items 1–2 for Lemmas 7/8; bounded vs unbounded closure
+
+Still `sorry`-free.
+
+### Added — `Garbling/GarbleKeys.lean` (item 2)
+
+`lemma4_garble`, `lemma4_simulate` and the `adversaryView` corollaries: every key appearing
+as a *part* of `Garble(C,x)` is atomic.  Supporting: `lemma4_sim`, `extractKeys_gEnc`,
+`extractKeys_sEnc`, `extractKeys_maskedLabelToExpr`, `makeLabels_atomic`.
+
+### Added — `Garbling/GarbleFixpoint.lean`
+
+* `keyVarsAbove`, `LabelsAbove`, `makeLabels_above`, and
+  **`makeLabels_stronglyIndependent`** — `Label(s)` yields a strongly independent label
+  expression, so Lemmas 5 and 6 apply at the top level.  (Disjointness of the two halves
+  comes from the counter windows: the first half's key variables are below the middle
+  counter, the second half's above it.)
+* `nonatomic_mem_encKeys`, **`lemma6_garble_cond1`** — Lemma 6(1) lifted to the whole
+  `Garble` expression.
+* **`adversaryKeys_G0_seed` / `adversaryKeys_G1_seed`** — the adversary knows a derived key
+  only if it knows the seed.  This is the `k_{1-z} ∉ S ⟹ G0 k_{1-z} ∉ S` half of Lemma 7's
+  `Dup` case, and it is exactly the combination of items 1 and 2: reflection (item 1) leaves
+  two branches, and `lemma4_garble` (item 2) kills one while `lemma6_garble_cond1` kills the
+  other.
+
+### Discovered — the bounded `prgClosure` is not LM18's `𝖦*`, and Lemma 7's statement needed relativising
+
+LM18 Definition 3 uses the **unbounded** closure
+`𝖦*(S) = {𝖦ʷ(k) | k ∈ S, w ∈ {0,1}*}` — an infinite set.  The Lean `prgClosure` bounds it
+by the expression's own `keySubterms`, which is what makes it computable.
+
+That bounding is **sound for computing the pattern** — `p(e,S)` only ever tests keys that
+occur in `e` — but it changes membership for keys that do *not* occur, and the label
+invariant quantifies over exactly those.  `scratch/DupTrailing.lean` exhibits it: for
+`Garble Dup true` the whole expression has key set `{K₁}`, while the output labels are
+`(b,(G0 K₀, G0 K₁))` and `(b,(G1 K₀, G1 K₁))`.
+
+* In LM18, `S = 𝖦*(…)` contains `G0 K₁` but not `G0 K₀` — exactly one of the pair, so the
+  invariant holds.
+* With the bounded closure, `G0 K₁ ∉ S` too, so *neither* is in `S` and the invariant fails.
+
+So `Lemma7`/`Lemma8` are **not provable as I stated them**, not because the paper is wrong
+but because of the formalization's bounding.  They now use `LabelInvariantIn`, which asks
+for the invariant only of labels at least one of whose keys actually occurs.  LM18 only ever
+applies Lemma 7 to labels that are used (as encryption keys at a later gate), so this is
+faithful.
+
+This is the third of my obligation statements that needed correcting before it could be
+discharged (after Lemmas 5/6 needing `LabelsBelow`, and 7/8 needing the ambient fixpoint).
+
+### Remaining for Lemmas 7/8
+
+3. Lemmas connecting a `SubCircuit`'s garbling to the global one.
+
+---
+
 ## [2026-09-16h] `prgClosure` saturation; `adversaryKeys` derivation properties
 
 Still `sorry`-free.  This closes **item 1** of the three things Lemmas 7/8 need.
