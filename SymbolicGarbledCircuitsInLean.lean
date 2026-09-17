@@ -11,6 +11,7 @@ import PRGExtension.Expression.Renamings
 import PRGExtension.Expression.Lemmas.Renaming
 import PRGExtension.Expression.Lemmas.NormalizeIdempotent
 import PRGExtension.Expression.Lemmas.HideEncrypted
+import PRGExtension.Expression.Lemmas.ReplacePRG
 import PRGExtension.Expression.ComputationalSemantics.Def
 import PRGExtension.Expression.ComputationalSemantics.Soundness
 import PRGExtension.Expression.ComputationalSemantics.RenamePreserves
@@ -33,6 +34,7 @@ import PRGExtension.Garbling.Lemma8
 import PRGExtension.Garbling.ValueInvariant
 import PRGExtension.Garbling.Alignment
 import PRGExtension.Garbling.Theorem5
+import PRGExtension.Garbling.Security
 
 import VCVio2.ToMathlib.Control.MonadTransformer
 import VCVio2.VCVio.OracleComp.OracleComp
@@ -49,3 +51,5 @@ import VCVio2.VCVio.OracleComp.DistSemantics.EvalDist
 
 -- import SymbolicGarbledCircuitsInLean.Garbling.Security
 -- import SymbolicGarbledCircuitsInLean.Garbling.Correctness
+import PRGExtension.Expression.ComputationalSemantics.SoundnessProof.HidingOneKeyGen
+import PRGExtension.Expression.ComputationalSemantics.SoundnessProof.FixpointStep

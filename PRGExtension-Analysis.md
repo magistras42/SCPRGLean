@@ -682,8 +682,23 @@ garbling, always key `0` for the simulation.  And `AgreesOn` states structurally
 records the right value at each gate, so the main induction splits along `Compose` with no
 freshness reasoning; freshness is confined to `agreesOn_valueMap`.
 
-Remaining: `FixpointStepSound` (in `AdversaryView.lean`), a named type-checked `Prop`.  All
-of LM18 Lemmas 2 and 4–8 and Theorems 4–5 are proved.
+**Nothing remains.**  `FixpointStepSound` is proved (`SoundnessProof/FixpointStep.lean`), so
+`symbolicToSemanticSoundness` carries no side conditions and `garblingSecure`
+(`Garbling/Security.lean`) gives computational simulation security of the PRG-based garbling
+scheme from IND-CPA security of the encryption scheme plus PRG security.
+
+The last gap was LM18 Lemma 3's general case.  `hideOneKeyGen`
+(`SoundnessProof/HidingOneKeyGen.lean`) hides a *non-atomic* key by idealising the PRG node
+at the bottom of its chain (`replacePRG`), hiding the shortened key by induction on
+`keySize`, and undoing the hop — which works because idealisation commutes with hiding
+(`rp_hideSelected`) and never creates an ancestor relation (`strictYields_rp_reflect`), both
+in `Expression/Lemmas/ReplacePRG.lean`.  `fixpointStepSound` then reads the two hypotheses
+off the fixpoint: a key the step hides has neither a strict ancestor nor a strict descendant
+occurring in the view, since either would place it in the recovery set.  One adjustment was
+needed — the hidden set is restricted to `encKeys(v)` rather than `allParts(v)`, which
+changes nothing (`hideSelectedRestrictEnc`) but is what makes `k ∈ exprKeys(v)` available.
+
+All of LM18 Lemmas 2–8 and Theorems 1, 4 and 5 are proved.
 
 ---
 

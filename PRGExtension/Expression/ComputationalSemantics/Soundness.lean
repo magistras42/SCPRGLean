@@ -9,6 +9,7 @@ import PRGExtension.Expression.ComputationalSemantics.PrgSecurity
 import PRGExtension.ComputationalIndistinguishability.Lemmas
 import PRGExtension.Expression.ComputationalSemantics.SoundnessProof.HidingOneKey
 import PRGExtension.Expression.ComputationalSemantics.SoundnessProof.AdversaryView
+import PRGExtension.Expression.ComputationalSemantics.SoundnessProof.FixpointStep
 
 import PRGExtension.Core.Fixpoints
 import Mathlib.Probability.Distributions.Uniform
@@ -192,3 +193,34 @@ theorem symbolicToSemanticIndistinguishabilityOfStep
   · exact symbolicToSemanticIndistinguishabilityAdversaryViewOfStep IsPolyTime enc prg Hstep expr1
   · rw [Hi2]
     exact indSym (symbolicToSemanticIndistinguishabilityAdversaryViewOfStep IsPolyTime enc prg Hstep expr2)
+
+/--
+  **Soundness of the symbolic model, with no side conditions.**
+
+  Symbolically indistinguishable expressions have computationally indistinguishable
+  semantics, given only IND-CPA security of the encryption scheme and security of the PRG.
+  This is LM18 Theorem 1 for the PRG-extended algebra: `fixpointStepSound` discharges the
+  last obligation, so the theorem now carries no `hidingSideCondition` and no atomicity
+  hypothesis.
+-/
+theorem symbolicToSemanticSoundness
+  (IsPolyTime : PolyFamOracleCompPred)
+  (HPolyTime : PolyTimeClosedUnderComposition (fun {_ _ _} => IsPolyTime))
+  (Hreduction : ∀ (enc : encryptionScheme) (prg : prgScheme) (shape : Shape)
+    (expr : Expression shape) (key₀ : ℕ), IsPolyTime (reductionHidingOneKey enc prg expr key₀))
+  (HreductionPrg : ∀ (enc_ : encryptionScheme) (prg_ : prgScheme) (s_ : Shape)
+    (expr_ : Expression s_) (targetSeed_ : Expression Shape.KeyS) (idx0_ idx1_ : ℕ),
+    IsPolyTime (fun κ => reductionToPrgOracle enc_ prg_ expr_ targetSeed_ idx0_ idx1_ κ))
+  (enc : encryptionScheme)
+  (prg : prgScheme)
+  (HEncIndCpa : encryptionSchemeIndCpa (fun {_ _ _} => IsPolyTime) enc)
+  (HPrgSecure : prgSchemeSecure (fun {_ _ _} => IsPolyTime) prg)
+  {shape : Shape} (expr1 expr2 : Expression shape)
+  (Hi : symIndistinguishable expr1 expr2) :
+  CompIndistinguishabilityDistr (fun {_ _ _} => IsPolyTime)
+    (famDistrLift (exprToFamDistr enc prg expr1))
+    (famDistrLift (exprToFamDistr enc prg expr2)) :=
+  symbolicToSemanticIndistinguishabilityOfStep IsPolyTime HPolyTime enc prg
+    (fixpointStepSound IsPolyTime HPolyTime Hreduction HreductionPrg enc prg
+      HEncIndCpa HPrgSecure)
+    expr1 expr2 Hi

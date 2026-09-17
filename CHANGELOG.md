@@ -3,6 +3,90 @@
 All notable changes to the proofs and code in this repository.
 Section numbers in brackets refer to [`PRGExtension-Analysis.md`](PRGExtension-Analysis.md).
 
+## [2026-09-17a] — **`FixpointStepSound` proved; the framework has no remaining obligations**
+
+`fixpointStepSound` is a theorem, so `symbolicToSemanticSoundness` (LM18 Theorem 1 for the
+PRG algebra, **no side conditions**) and `garblingSecure` (computational simulation security
+of the PRG garbling scheme) follow.  Build is clean and `sorry`-free; everything depends only
+on `propext, Classical.choice, Quot.sound`.
+
+### The gap that was closed
+
+`symbolicToSemanticIndistinguishabilityHidingOneKey` can only target a key *variable*: the
+IND-CPA reduction has to identify the oracle's uniformly random key with the key it hides.
+The fixpoint iteration does not respect that — at an intermediate stage the keys being hidden
+can include `G0 K₅` whose root `K₅` has itself been hidden away, so
+`Roots(Keys(view)) ⊆ 𝐊` fails (`scratch/GarbleSideCondition.lean`).  That is exactly LM18
+Lemma 3's general case, discharged there by a pseudorandom key renaming.
+
+### Added — `Expression/Lemmas/ReplacePRG.lean` (new)
+
+The symbolic bookkeeping for one idealisation hop `replacePRG (K_t) i j`, abbreviated `rp`.
+
+* `rp_G0`, `rp_G1`, `rp_pair`, `rp_perm`, `rp_enc`, `rp_hidden` — the constructor equations.
+* `exprKeys_rp`, `extractKeys_rp` — `Keys` and `Parts` transport as **images**.
+* `keySubterms_rp` — key subterms only shrink (`K_t` itself disappears), which is what the
+  freshness side conditions need.
+* `unrp`, `unrp_rp`, `rp_inj` — `unrp` is a left inverse on keys avoiding the two fresh
+  variables, giving injectivity.
+* **`strictYields_rp_reflect`** — idealisation can *break* a `G`-chain but never *creates*
+  one: an ancestor relation in the idealised expression was already there.  This is what
+  transports LM18's two conditions across the hop.
+* **`rp_hideSelected`** — idealisation commutes with hiding one key.  The only interesting
+  case is `Enc c m`, where injectivity gives `c = k ↔ rp c = rp k`.
+* `baseVar`, `strictYields_baseVar`, **`keySize_rp`** — the termination measure: each hop
+  shortens the chain of the key being hidden by exactly one.
+* `exists_fresh_index` — a finite key set leaves infinitely many variable indices unused.
+* `keySubterms_trans`, `encKeys_key`.
+
+### Added — `SoundnessProof/HidingOneKeyGen.lean` (new)
+
+**`hideOneKeyGen`** — hiding one key with *no* atomicity restriction.  Its two hypotheses are
+LM18's, read off `Keys(expr)`:
+
+* `Hroot` — nothing occurring in `expr` is a strict *ancestor* of `k`, i.e. `k` is a root of
+  `Keys(expr)`.  For non-atomic `k` this is precisely what licenses the hop: the atomic
+  variable `K_t` at the bottom of `k`'s chain does not occur in `expr`, which is
+  `PrgRenameRel.idealize`'s side condition.
+* `Hdesc` — nothing occurring in `expr` is a strict *descendant* of `k`.  For atomic `k` this
+  is exactly `seedFree`, which the IND-CPA reduction needs.
+
+By induction on `keySize k`.  Atomic `k` is the existing IND-CPA step.  Non-atomic `k`:
+idealise at `K_t` (one PRG hop), hide the shortened key by induction, undo the hop.  The
+middle step lines up because idealisation commutes with hiding.
+
+### Added — `SoundnessProof/FixpointStep.lean` (new)
+
+* `encKeys_key`, `hideEncryptedEncAux`, `hideSelectedRestrictEnc` — hiding is determined by
+  the *encryption* keys alone, the `encKeys` analogue of `hideSelectedRestrict`.
+* **`hidingGen`** — the set version of `hideOneKeyGen`, replacing
+  `symbolicToSemanticIndistinguishabilityHidingInner`'s atomicity hypothesis by the two
+  `Keys` conditions.  Both survive `removeOneKeyProper`, since hiding only shrinks `Keys`.
+* **`fixpointStepSound`** — the two conditions come straight off the fixpoint.  The keys the
+  step hides are `W = (z \ 𝓕(z)) ∩ encKeys(v)`; restricting to encryption keys is what makes
+  them available (a key of `allParts(v)` need not be in `exprKeys(v)`, e.g. `K₅` when only
+  `G0 K₅` occurs — and hiding such a key changes nothing anyway).  For `k ∈ W`:
+  * no strict **descendant** of `k` occurs in the view — else `k` would be collected by the
+    ancestor clause of LM18 Definition 3, hence recovered, hence not in `z \ 𝓕(z)`;
+  * no strict **ancestor** `k'` of `k` occurs in the view — such a `k'` is itself in the
+    recovery base (directly if it is a part, via the ancestor clause if it is an encryption
+    key), and then `k` lies in its PRG closure by `mem_prgClosure_of_strictYields`, so `k` is
+    recovered.
+
+### Added — capstones
+
+* `Expression/ComputationalSemantics/Soundness.lean`: **`symbolicToSemanticSoundness`** —
+  symbolic indistinguishability implies computational indistinguishability, given only
+  IND-CPA security of the encryption scheme and security of the PRG.  No `hidingSideCondition`,
+  no atomicity hypothesis.
+* `Garbling/Security.lean` (new): **`garblingSecure`** — composing it with `theorem5` gives
+  computational simulation security of the PRG-based garbling scheme.
+
+### Status
+
+No obligations remain.  LM18 Lemmas 2–8 and Theorems 1, 4 and 5 are all proved, and the
+garbling scheme's computational security follows.
+
 ## [2026-09-17] — **LM18 Theorem 5 proved**
 
 `theorem5 : Theorem5` is a theorem:
