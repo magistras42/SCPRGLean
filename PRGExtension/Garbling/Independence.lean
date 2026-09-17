@@ -199,41 +199,8 @@ inductive SubCircuit : {s t s' t' : WireBundle} → Circuit s' t' → Circuit s 
   | first {v₁ v₂ u s' t' : WireBundle} {c : Circuit v₁ v₂} {c' : Circuit s' t'} :
       SubCircuit c' c → SubCircuit c' (Circuit.FirstC c u)
 
-/--
-  **LM18 Lemma 7.**  `Gb` preserves the label invariant: if every input label has exactly
-  one of its keys in `S`, so does every output label.
-
-  `S` is *not* arbitrary — it is `Fix(𝓕_e) = adversaryKeys e` for the ambient garbled
-  expression `e = Garble(C,x)`, and the lemma ranges over the sub-circuits of `C`.  The
-  `Dup` case genuinely needs this: it argues that `G^h(k^{1-z}) ∉ S` using Lemma 6 applied
-  to the whole garbled circuit, which has no counterpart for an unconstrained `S`.
--/
-def Lemma7 : Prop :=
-  ∀ {s t : WireBundle} (c : Circuit s t) (x : bundleBool s),
-    ∀ {s' t' : WireBundle} (c' : Circuit s' t'), SubCircuit c' c →
-    ∀ (u : labelType s') (ctr : ℕ),
-      LabelInvariantIn (keySubterms (Garble c x)) (adversaryKeys (Garble c x)) u →
-      LabelInvariantIn (keySubterms (Garble c x)) (adversaryKeys (Garble c x)) (gb c' u ctr).2.1
-
-/--
-  **LM18 Lemma 8.**  The same for the simulator, with `T = Fix(𝓕_f)` for
-  `f = Simulate(C, C(x))`.  There every label's actual value is `0`, because `Sim` always
-  encodes with `k⁰`.
--/
-def Lemma8 : Prop :=
-  ∀ {s t : WireBundle} (c : Circuit s t) (y : bundleBool t),
-    ∀ {s' t' : WireBundle} (c' : Circuit s' t'), SubCircuit c' c →
-    ∀ (u : labelType s') (ctr : ℕ),
-      LabelInvariantIn (keySubterms (Simulate c y)) (adversaryKeys (Simulate c y)) u →
-      LabelInvariantIn (keySubterms (Simulate c y)) (adversaryKeys (Simulate c y)) (sim c' u ctr).2.1
-
-/--
-  **LM18 Theorem 5**, the goal these lemmas serve:
-  `Pattern(Garble(C,x)) ≈ Pattern(Simulate(C,C(x)))`, i.e. the garbled circuit and the
-  simulated one have symbolically indistinguishable adversary views.
--/
-def Theorem5 : Prop :=
-  ∀ {s t : WireBundle} (c : Circuit s t) (x : bundleBool s),
-    symIndistinguishable (Garble c x) (Simulate c (evalCircuit c x))
+-- `Lemma7`, `Lemma8` and `Theorem5` are stated in `PRGExtension.Garbling.GbStage`: they
+-- need the *stage* refinement of `SubCircuit`, which tracks the labels and key counter
+-- the garbling actually reaches.
 
 end PRG

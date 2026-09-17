@@ -3,6 +3,67 @@
 All notable changes to the proofs and code in this repository.
 Section numbers in brackets refer to [`PRGExtension-Analysis.md`](PRGExtension-Analysis.md).
 
+## [2026-09-16j] — Garbling stages: `GbStage` replaces bare `SubCircuit` in Lemmas 7/8
+
+### Why
+
+`Lemma7`/`Lemma8` were stated over `SubCircuit c' c` together with *arbitrary* input labels
+`u` and key counter `ctr`.  As stated they are false.  `gb` takes `u` and `ctr` as
+independent arguments, so for an arbitrary `u`/`ctr` the garbling of a sub-circuit `C'` has
+no relationship at all to the garbling of `C`:
+
+* `NAnd` at counter `ctr` mints `K_{2·ctr}, K_{2·ctr+1}`.  For an arbitrary `ctr` these need
+  not be keys of `Garble C x`, so nothing constrains their membership in
+  `adversaryKeys (Garble C x)` and the "exactly one of the pair is in `S`" conclusion fails.
+* The `Dup` case of LM18's proof of Lemma 7 argues that `G^h(k^{1-z}) ∉ S` by appealing to
+  Lemma 6 *for the whole garbled circuit*.  That step has no counterpart when `u` is
+  unrelated to the circuit being garbled.
+
+LM18's prose ("for any sub-circuit `C'` of `C`") implicitly means the labels and counter the
+garbling actually reaches.  `GbStage` makes that explicit.  This is a gap in the
+formalisation, not in LM18.
+
+### Added — `PRGExtension/Garbling/GbStage.lean` (new)
+
+* `GbStage c u ctr c' u' ctr'` — inductive: garbling `c` from `(u, ctr)` performs, as a
+  sub-computation, the garbling of `c'` from `(u', ctr')`.  Constructors `refl`,
+  `composeL`, `composeR` (threading `(gb c1 u ctr).2`), `first`.
+* `GbStage.subCircuit` — every stage is a sub-circuit, so `GbStage` refines `SubCircuit`.
+* `GbStage.ctr_le` — a stage never rewinds the key counter.
+* `GbStage.exprKeys_subset`, `GbStage.extractKeys_subset` — a stage's garbled expression
+  sits inside the global one, key-wise.  This is what lets fixpoint facts about
+  `adversaryKeys (Garble c x)` be used at a sub-circuit.
+* `GbStage.hyps` — `StronglyIndependent` and `LabelsBelow` are inherited by every stage
+  (via `lemma5core` and `gb_labels_below`), so Lemmas 5 and 6 apply at each stage.
+* `GbStage.labelKeys_yielded` — every key of a stage's input labels is yielded by a key
+  appearing as a *part* of the global garbling, or by a global input label key.  This is
+  LM18 Lemma 5(2) propagated along a stage (`yields_trans` over `lemma5core`'s clause (2)).
+* `sim_snd_eq_gb_snd` — `sim` and `gb` thread output labels and counters identically; they
+  differ only in the garbled tables.  Hence **one** stage relation serves both Lemma 7 and
+  Lemma 8, and no separate `SimStage` is needed.
+* `GbStage.exprKeys_subset_sim` — the `sim` analogue of `exprKeys_subset`.
+* `gbStage_invariant` — the label invariant propagates along a stage, given only that a
+  single `gb` step preserves it.  Stated over an abstract step hypothesis so Lemmas 7 and 8
+  share it.
+* `lemma7_propagates` — the corollary Theorem 5 consumes: invariant at the input labels ⟹
+  invariant at every stage's input *and* output labels.
+
+### Changed
+
+* `Lemma7`, `Lemma8`, `Theorem5` moved from `Garbling/Independence.lean` to
+  `Garbling/GbStage.lean` and restated over `GbStage c (makeLabels s 0).1
+  (makeLabels s 0).2 c' u' ctr'` instead of `SubCircuit c' c` with arbitrary `u`, `ctr`.
+  `SubCircuit` itself is kept in `Independence.lean` (it is still the right notion for
+  statements that do not mention labels) with a pointer comment.
+* `SymbolicGarbledCircuitsInLean.lean` imports the new module.
+
+### Status
+
+Build is clean and `sorry`-free.  All new lemmas depend only on
+`propext, Classical.choice, Quot.sound` (several on strictly fewer).  `Lemma7`, `Lemma8`,
+`Theorem5` and `FixpointStepSound` remain the open obligations, all as named, type-checked
+`Prop`s that nothing else silently assumes.
+
 ## [2026-09-16i] Items 1–2 for Lemmas 7/8; bounded vs unbounded closure
 
 Still `sorry`-free.
