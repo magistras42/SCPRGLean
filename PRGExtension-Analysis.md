@@ -666,8 +666,24 @@ Lemma 8 needed no separate Lemma 6 proof: `encKeys_sim_eq_gb` and `exprKeys_sim_
 show `Sim` uses the same encryption keys as `Gb` and a subset of its key set, so Lemma 6
 transports to the simulator directly.
 
-Remaining: `Theorem5` (in `GbStage.lean`) and `FixpointStepSound` (in `AdversaryView.lean`),
-both as named type-checked `Prop`s.
+**Theorem 5 is now proved** (`Garbling/Theorem5.lean`, on `Garbling/ValueInvariant.lean` and
+`Garbling/Alignment.lean`).  The renaming that witnesses it is `makeVarRenaming f`, with
+`f i` the value carried by the wire whose label has bit index `i`: its key half sends each
+label's active key to that label's key `0`, and its bit half moves each garbled table's
+decryptable row to position `(0,0)`.  At a `NAnd` gate the two cancel exactly — the row
+`(v_i,v_j)` carries `(¬B_h, K_h¹)` and the output value is `1` (so `f` flips `h`, giving
+`¬¬B_h ↝ B_h` and `K_h¹ ↦ K_h⁰`), or it carries `(B_h, K_h⁰)` and the output value is `0` (so
+`f` fixes `h`).  Either way the result is `(B_h, K_h⁰)`, which is what `Sim` writes in all
+four rows.
+
+Two supporting refinements were needed.  `LabelValueIn`/`LabelZeroIn` sharpen Lemmas 7 and 8
+from "exactly one key of the pair is recovered" to *which* one — the value's key for the
+garbling, always key `0` for the simulation.  And `AgreesOn` states structurally that `f`
+records the right value at each gate, so the main induction splits along `Compose` with no
+freshness reasoning; freshness is confined to `agreesOn_valueMap`.
+
+Remaining: `FixpointStepSound` (in `AdversaryView.lean`), a named type-checked `Prop`.  All
+of LM18 Lemmas 2 and 4–8 and Theorems 4–5 are proved.
 
 ---
 

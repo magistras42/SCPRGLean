@@ -30,6 +30,9 @@ import PRGExtension.Garbling.GbStage
 import PRGExtension.Garbling.ViewKeys
 import PRGExtension.Garbling.Lemma7
 import PRGExtension.Garbling.Lemma8
+import PRGExtension.Garbling.ValueInvariant
+import PRGExtension.Garbling.Alignment
+import PRGExtension.Garbling.Theorem5
 
 import VCVio2.ToMathlib.Control.MonadTransformer
 import VCVio2.VCVio.OracleComp.OracleComp

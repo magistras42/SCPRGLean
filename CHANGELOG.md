@@ -3,6 +3,86 @@
 All notable changes to the proofs and code in this repository.
 Section numbers in brackets refer to [`PRGExtension-Analysis.md`](PRGExtension-Analysis.md).
 
+## [2026-09-17] — **LM18 Theorem 5 proved**
+
+`theorem5 : Theorem5` is a theorem:
+`symIndistinguishable (Garble c x) (Simulate c (evalCircuit c x))`.
+Build is clean and `sorry`-free; it depends only on `propext, Classical.choice, Quot.sound`.
+
+### The witness
+
+`symIndistinguishable` asks for a variable renaming `r` with
+`normalizeExpr (applyVarRenaming r (adversaryView (Garble c x)))
+ = normalizeExpr (adversaryView (Simulate c (C x)))`.
+
+The witness is `makeVarRenaming f` (which `Expression/Renamings.lean` already provided, with
+bijectivity proved), where `f i` is the value carried by the wire whose label has bit index
+`i`.  It has to do two things at once:
+
+* the **key** half `makeKeySwap f` exchanges `K_{2i}` and `K_{2i+1}` exactly when wire `i`
+  carries `1`, sending each label's *active* key — the one the garbling reveals — to that
+  label's key `0`, which is the one the simulation reveals;
+* the **bit** half `bitPerm f` negates `B_i` on the same indices, which via `normalizeExpr`'s
+  rule `π[¬b](p₀,p₁) ↝ π[b](p₁,p₀)` moves each garbled table's decryptable row to position
+  `(0,0)`, where the simulator's is.
+
+At a `NAnd` gate the two effects cancel exactly.  Row `(v_i,v_j)` carries `(¬B_h, K_h¹)`
+unless `(v_i,v_j) = (1,1)`, where it carries `(B_h, K_h⁰)`.  In the first case the gate's
+output is `1`, so `f` flips index `h`: `¬B_h ↦ ¬¬B_h ↝ B_h` and `K_h¹ ↦ K_h⁰`.  In the second
+the output is `0` and `f` fixes `h`.  Either way the row becomes `(B_h, K_h⁰)` — exactly what
+`Sim` writes in *all four* rows.  The three undecryptable rows become `Enc k⁰ᵢ ⦃k¹ⱼ⦄` and two
+copies of `⦃k¹ᵢ⦄`, matching the simulator's.
+
+### Added — `Garbling/ValueInvariant.lean` (new)
+
+Lemmas 7 and 8 say *exactly one* key of each pair is recovered; the renaming needs to know
+**which**.
+
+* `LabelValueIn U S u v` — the recovered key is `key_v`, for the wire's actual value `v`.
+* `LabelZeroIn U T u` — the simulator always recovers `key⁰`.
+* **`lemma7_value`** and **`lemma8_zero`** — the proofs of `lemma7`/`lemma8_gb` with the case
+  analysis on "which key is in `S`" replaced by the value that determines it.  At a `NAnd`
+  gate with input values `(v_i,v_j)` exactly row `(v_i,v_j)` decrypts, and its payload is
+  `key_{¬(v_i ∧ v_j)}` — the output label's active key.
+
+### Added — `Garbling/Alignment.lean` (new)
+
+* `gbCtr` + `gb_ctr_eq` — the key counter as a function of the circuit alone.
+* `SwapCompatible` / `SwapCompatibleB` — a label's two keys are `G^w(K_{2b})` and
+  `G^w(K_{2b+1})` for the *same* `w` and `b = l.bit`.  Rather than name `w`, the predicate
+  records the consequence: `makeKeySwap f` exchanges the label's keys exactly when `f` flips
+  the label's own bit index.  With `makeKeySwap_even`/`makeKeySwap_odd`,
+  `swapCompatible_varK`/`_G0`/`_G1`, `gb_swapCompatible`, `makeLabels_swapCompatible`.
+* `LabelValues f u v`, `AgreesOn f c v ctr`, `valueMap`.  `AgreesOn` is *structural*: it says
+  `f` records the right value at each `NAnd` gate of `c`, and `Compose` splits it along the
+  circuit.  That is what keeps the main induction free of freshness reasoning — freshness
+  enters exactly once, in `agreesOn_valueMap`, via `valueMap_lt`/`valueMap_ge`/
+  `agreesOn_congr`.
+
+### Added — `Garbling/Theorem5.lean` (new)
+
+* `nandPattern` — the shape both sides normalise to at a gate.
+* **`nand_pattern_gb`** and **`nand_pattern_sim`** — the two four-row computations.
+* **`theorem5_core`** — by induction on the sub-circuit, carrying the `GbStage` hypothesis so
+  that `lemma7_value` and `lemma8_zero` are available at the intermediate labels.  Returns
+  the pattern equality *and* `LabelValues f (gb c' u' ctr').2.1 (evalCircuit c' v)`, which the
+  `Compose` case needs.
+* `selKeys` / `unselKeys`, `extractKeys_view_gEnc_eq`, `unsel_notMem_sel` (distinct labels
+  never hide a key they also reveal), `labelValueIn_of`, `labelZeroIn_of`, `zeroBundle`,
+  `sEnc_eq_gEnc` (`SEnc u = GEnc u 0⃗`, so the simulator reuses the `GEnc` computations).
+* `input_sel_mem` / `input_unsel_notMem` and their `sim` counterparts — the base case.  The
+  revealed key is in the fixpoint because it is readable off the view; the withheld one is
+  not, because it is atomic, too old to come from a gate (`extractKeys_view_range` puts every
+  gate's contribution at index `≥ 2·ctr₀`), and distinct from every revealed input key.
+* `inputValues` + `inputValues_lt`/`_ge`, `labelValues_congr`, `labelValues_inputValues`.
+* `view_gEnc_eq`, `view_mask_eq` — the encoded-input and output-mask halves.
+* **`theorem5 : Theorem5`**.
+
+### Status
+
+`FixpointStepSound` (in `AdversaryView.lean`) is the last open obligation.  All of LM18
+Lemmas 2 and 4–8 and Theorems 4–5 are now proved.
+
 ## [2026-09-16k] — **LM18 Lemmas 7 and 8 proved**
 
 `lemma7 : Lemma7` and `lemma8 : Lemma8` are now theorems.  Build is clean and `sorry`-free;
