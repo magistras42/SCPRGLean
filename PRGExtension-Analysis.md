@@ -453,8 +453,18 @@ as such in the source. Nothing else in the library depends on it.
 
 ### 4.7 Unspecified or unproven details in the computational model
 
-**STATUS: items 1 and 5 fixed; 2 and 3 superseded by `PrgHopChain`; 6 and 7 partly
-addressed (vocabulary added, renaming still atomic-only); 4, 8 and 9 still open.**
+**STATUS (final): items 1, 2, 3, 5, 6 and 7 fixed; 4 open; 8 and 9 unchanged but now
+documented.**  Item 2 is handled by `PrgHopChain`/`prgHopChainSound` plus the per-key hop
+iteration in `hideOneKeyGen`.  Item 3 dissolves once the hops are ordered **bottom-up**:
+`PrgRenameRel.idealize` only ever targets an *atomic* `VarK t` (the `baseVar` of the chain
+being hidden), and each hop replaces `G_b(K_t)` by a fresh variable that is uniform in the
+ideal world — so the next hop up the chain again targets a uniform seed, and no internal
+pseudorandom node is ever used as an oracle seed.  Item 7 is `PrgRenameRel`; what remains
+unformalised there is the purely symbolic factorisation [Mic09, Lemma 2], not the
+computational content.  Item 4 (the PRG is not tied to `IsPolyTime`) is still open and is
+recorded in `report.md` §6.  Item 9 is now *load-bearing* rather than incidental —
+`hideEncrypted_key`, `hideEncryptedS_K` and `rp_hideSelected` all rely on key expressions
+containing no bit expressions.
 
 Beyond the three defects above, the computational side of the PRG extension has gaps that will block proofs
 as soon as they are attempted. In rough order of how much they hurt:
