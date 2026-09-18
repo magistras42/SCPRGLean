@@ -10,6 +10,7 @@ import PRGExtension.ComputationalIndistinguishability.Lemmas
 import PRGExtension.Expression.ComputationalSemantics.SoundnessProof.HidingOneKey
 import PRGExtension.Expression.ComputationalSemantics.SoundnessProof.AdversaryView
 import PRGExtension.Expression.ComputationalSemantics.SoundnessProof.FixpointStep
+import PRGExtension.Expression.ComputationalSemantics.PolyTime
 
 import PRGExtension.Core.Fixpoints
 import Mathlib.Probability.Distributions.Uniform
@@ -213,3 +214,33 @@ theorem symbolicToSemanticSoundness
     (fixpointStepSound IsPolyTime HPolyTime enc prg Hreduction HreductionPrg
       HEncIndCpa HPrgSecure)
     expr1 expr2 Hi
+
+/--
+  **Soundness with the PRG reduction's efficiency *derived* rather than assumed.**
+
+  Same conclusion as `symbolicToSemanticSoundness`, but instead of taking
+  `PrgReductionPolyTime` on faith it takes the two claims that imply it: that the reduction's
+  fixed-size sampling prefix is efficient, and that the scheme's own evaluation is
+  (LM18 Definition 1).  See `ComputationalSemantics/PolyTime.lean`.
+
+  `EncReductionPolyTime` is still a hypothesis — that one needs a cost semantics for
+  `OracleComp`, since `reductionToOracle` recurses over the expression while querying.
+-/
+theorem symbolicToSemanticSoundnessFromEfficiency
+  (IsPolyTime : PolyFamOracleCompPred)
+  (HPolyTime : PolyTimeClosedUnderComposition (fun {_ _ _} => IsPolyTime))
+  (enc : encryptionScheme) (prg : prgScheme)
+  (Hreduction : EncReductionPolyTime IsPolyTime enc prg)
+  (Hsampler : ∀ {s : Shape} (expr : Expression s) (targetSeed : Expression Shape.KeyS)
+    (idx0 idx1 : ℕ), IsPolyTime (prgEnvSampler expr targetSeed idx0 idx1))
+  (Heval : EfficientEvalPrg IsPolyTime enc prg)
+  (HEncIndCpa : encryptionSchemeIndCpa (fun {_ _ _} => IsPolyTime) enc)
+  (HPrgSecure : prgSchemeSecure (fun {_ _ _} => IsPolyTime) prg)
+  {shape : Shape} (expr1 expr2 : Expression shape)
+  (Hi : symIndistinguishable expr1 expr2) :
+  CompIndistinguishabilityDistr (fun {_ _ _} => IsPolyTime)
+    (famDistrLift (exprToFamDistr enc prg expr1))
+    (famDistrLift (exprToFamDistr enc prg expr2)) :=
+  symbolicToSemanticSoundness IsPolyTime HPolyTime enc prg Hreduction
+    (reductionToPrgOracle_polyTime IsPolyTime HPolyTime enc prg Hsampler Heval)
+    HEncIndCpa HPrgSecure expr1 expr2 Hi

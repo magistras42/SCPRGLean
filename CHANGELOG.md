@@ -3,6 +3,43 @@
 All notable changes to the proofs and code in this repository.
 Section numbers in brackets refer to [`PRGExtension-Analysis.md`](PRGExtension-Analysis.md).
 
+## [2026-09-17d] — Plumb the derived PRG efficiency through to the top
+
+Follow-up to `[2026-09-17a]`: `reductionToPrgOracle_polyTime` was proved but referenced only
+in comments, so `garblingSecure` still took `PrgReductionPolyTime` on faith and the
+derivation counted for nothing.  Likewise `EfficientPrg` and `EfficientEnc` were stated but
+consumed by nothing.  Both fixed.
+
+### Added — `ComputationalSemantics/PolyTime.lean`
+
+* **`EvalEfficiencyFromPrimitives`** — names the one cost-semantics step the abstract model
+  cannot take: `EfficientEvalPrg` ought to *follow* from efficiency of the two primitives
+  (`evalExpr` does one `encrypt`/`prg0`/`prg1` call per node of a fixed expression), but
+  turning "per node" into a polynomial bound needs a cost semantics for that recursion, and
+  `PolyFamOracleCompPred` is opaque.  This is the same missing ingredient that keeps
+  `EncReductionPolyTime` a hypothesis.
+* **`reductionToPrgOracle_polyTime_of_primitives`** — `PrgReductionPolyTime` from LM18
+  Definition 1 alone, given that step.  `EfficientPrg`/`EfficientEnc` are now load-bearing
+  rather than documentation.
+
+### Added — `ComputationalSemantics/Soundness.lean`
+
+* **`symbolicToSemanticSoundnessFromEfficiency`** — same conclusion as
+  `symbolicToSemanticSoundness`, but taking the two claims that *imply*
+  `PrgReductionPolyTime` (the sampling prefix is efficient; the scheme evaluates efficiently)
+  instead of assuming it.  `Soundness.lean` now imports `PolyTime.lean`.
+
+### Added — `Garbling/Security.lean`
+
+* **`garblingSecureFromEfficiency`** — the recommended entry point.  `garblingSecure` is kept
+  for callers who would rather assume `PrgReductionPolyTime` directly.
+
+### Status
+
+`EncReductionPolyTime` remains the only efficiency hypothesis that is assumed rather than
+derived, and `EvalEfficiencyFromPrimitives` is the one step that would discharge the rest.
+Both come down to the absence of a cost semantics for `OracleComp`.
+
 ## [2026-09-17c] — [Mic09, Lemma 2]: factorisation of a pseudorandom key renaming
 
 ### Added — `Expression/Lemmas/PseudorandomRenaming.lean` (new)

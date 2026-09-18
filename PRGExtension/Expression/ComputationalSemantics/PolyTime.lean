@@ -131,4 +131,34 @@ theorem reductionToPrgOracle_polyTime
     (Heval (replacePRG targetSeed idx0 idx1 expr) _ idx0 idx1)
 
 
+/--
+  **The one cost-semantics step the abstract model cannot take.**
+
+  `EfficientEvalPrg` ought to *follow* from efficiency of the two primitives: `evalExpr`
+  walks a fixed expression, doing one `encrypt`, `prg0` or `prg1` call per node.  Turning
+  "per node" into a polynomial bound needs a cost semantics for that recursion, and
+  `PolyFamOracleCompPred` is an opaque predicate with no such notion — so the implication is
+  named here rather than proved.  It is the same missing ingredient that keeps
+  `EncReductionPolyTime` a hypothesis.
+
+  Anything that assumes this gets `EfficientEvalPrg`, and hence `PrgReductionPolyTime`, from
+  LM18 Definition 1 alone.
+-/
+def EvalEfficiencyFromPrimitives (IsPolyTime : PolyFamOracleCompPred) : Prop :=
+  ∀ (enc : encryptionScheme) (prg : prgScheme),
+    EfficientEnc IsPolyTime enc → EfficientPrg IsPolyTime prg →
+    EfficientEvalPrg IsPolyTime enc prg
+
+/-- `PrgReductionPolyTime` from LM18 Definition 1, given the cost-semantics step. -/
+theorem reductionToPrgOracle_polyTime_of_primitives
+    (IsPolyTime : PolyFamOracleCompPred)
+    (HPolyTime : PolyTimeClosedUnderComposition IsPolyTime)
+    (enc : encryptionScheme) (prg : prgScheme)
+    (Hsampler : ∀ {s : Shape} (expr : Expression s) (targetSeed : Expression Shape.KeyS)
+      (idx0 idx1 : ℕ), IsPolyTime (prgEnvSampler expr targetSeed idx0 idx1))
+    (Hcost : EvalEfficiencyFromPrimitives IsPolyTime)
+    (Henc : EfficientEnc IsPolyTime enc) (Hprg : EfficientPrg IsPolyTime prg) :
+    PrgReductionPolyTime IsPolyTime enc prg :=
+  reductionToPrgOracle_polyTime IsPolyTime HPolyTime enc prg Hsampler (Hcost enc prg Henc Hprg)
+
 end PRG

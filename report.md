@@ -293,7 +293,10 @@ The honest boundary of `garblingSecure`:
 
 1. `encryptionSchemeIndCpa` and `prgSchemeSecure` — the standard cryptographic assumptions.
 2. `EncReductionPolyTime IsPolyTime enc prg` — that the **IND-CPA** reduction, for the
-   scheme at hand, runs in polynomial time.  Assumed; the informal cost argument (including
+   scheme at hand, runs in polynomial time.  (Use `garblingSecureFromEfficiency` /
+   `symbolicToSemanticSoundnessFromEfficiency` as the entry points: they take the efficiency
+   claims and derive `PrgReductionPolyTime` internally.  `garblingSecure` is retained for
+   callers who prefer to assume it.)  Assumed; the informal cost argument (including
    the `G0`/`G1` cases) is at the end of `HidingOneKey.lean`.  It cannot currently be proved:
    `reductionToOracle` recurses over the expression making oracle queries, so the structural
    decomposition would need closure under sequencing *two oracle computations*, and
@@ -306,6 +309,12 @@ The honest boundary of `garblingSecure`:
    * `EfficientPrg` / `EfficientEnc` / `EfficientEvalPrg` state LM18 Definition 1's
      efficiency requirement, which the inherited model omitted entirely — `prgFunctions` was
      an arbitrary pair of functions with no tie to `IsPolyTime`.
+   * `EvalEfficiencyFromPrimitives` names the single remaining step:
+     `EfficientEnc ∧ EfficientPrg → EfficientEvalPrg`.  It is not provable here because
+     `evalExpr`'s recursion has no cost semantics — the same gap that keeps
+     `EncReductionPolyTime` assumed.  Given it,
+     `reductionToPrgOracle_polyTime_of_primitives` yields `PrgReductionPolyTime` from LM18
+     Definition 1 alone.
    * Both hypotheses used to be quantified over **all** schemes, which is false in any
      concrete cost model (an inefficient scheme has an inefficient reduction) and would have
      made every downstream theorem vacuous on instantiation.  They are now fixed to the
