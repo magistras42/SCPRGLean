@@ -3,6 +3,53 @@
 All notable changes to the proofs and code in this repository.
 Section numbers in brackets refer to [`PRGExtension-Analysis.md`](PRGExtension-Analysis.md).
 
+## [2026-09-17e] — [Mic09, Lemma 2]: the generation direction proved; the earlier statement was wrong
+
+### Corrected — the previous `Mic09Lemma2General` was false as stated
+
+It carried the hypothesis *"distinct occurring keys receive images with distinct atomic
+bases"*.  That excludes `growOne t i j`, which sends `i` to `G0(K_t)` and `j` to `G1(K_t)` —
+both with base `t` — i.e. it excluded the very generator it was meant to subsume.  Checked
+mechanically before replacing it.  The correct condition is that the images are **pairwise
+non-yielding** (independent), which is `FreshRenaming.indep`.
+
+### Added — `FreshRenaming` and the generation theorem
+
+* **`FreshRenaming e ρ`** — `ρ` moves each atomic key occurring in `e` onto a key expression
+  built entirely over *new* variables (`fresh`), injectively (`inj`), with the images
+  pairwise independent (`indep`).  `fresh` is what makes each `idealize` seed absent from the
+  expression; `indep` is what stops a seed being revealed alongside a key derived from it.
+* **`prgRenameRel_of_freshRenaming`** — every fresh independent renaming is reachable from
+  LM18's two generators.  By induction on `∑ keySize (ρ n)`: all-atomic images give the
+  `atomic` generator; otherwise idealising at the bottom of one image's chain shortens it by
+  exactly one (`keySize_rp`) and preserves all three conditions (via `rp_inj` and
+  `strictYields_rp_reflect`), so one `symm idealize` hop plus the induction hypothesis
+  finishes.
+* **`prgRenameRel_rename_then_grow`** — the composite LM18 actually uses: rename the roots by
+  an arbitrary bijection, then grow the PRG structure.
+
+### Added — supporting results
+
+* **`exists_perm_extending`** — extending a finite injection that moves its domain off
+  itself to a permutation of `ℕ`, as a product of transpositions with disjoint supports.
+  Mathlib's `Equiv.extendSubtype` assumes a `Fintype` and so does not apply to `ℕ`.  This is
+  what the base case needs.
+* `occIdx` + `mem_occIdx` — the atomic key indices occurring in an expression.
+* `substKeys_congr`, `substKeys_id`, `exprKeys_substKeys`, `keySubterms_substKeys`,
+  `keySubterms_substKeys_sub`, `substKeys_rp_comm`, `substKeys_key_ne_varK`.
+* `atomic_eq_varK`, `keySubterms_baseVar`, `keySize_rp_le`, `rp_eq_varK`.
+
+The `Compose`-style step needed one trick worth recording: `substKeys_rp_comm` wants
+`∀ n, ρ n ≠ K_t`, but independence only bounds the *occurring* indices.  The proof first
+replaces `ρ` by a copy that maps every non-occurring index above `t` — harmless, since
+`substKeys` only reads `ρ` on `occIdx e` (`substKeys_congr`).
+
+### Still not covered
+
+A renaming that *mixes* permutation and growth — one that both permutes occurring keys and
+grows structure over keys that stay put.  It should factor as (bijection) ∘ (fresh growth);
+the factorisation is not formalised.  Nothing depends on it.
+
 ## [2026-09-17d] — Plumb the derived PRG efficiency through to the top
 
 Follow-up to `[2026-09-17a]`: `reductionToPrgOracle_polyTime` was proved but referenced only

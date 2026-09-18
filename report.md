@@ -319,14 +319,14 @@ The honest boundary of `garblingSecure`:
      concrete cost model (an inefficient scheme has an inefficient reduction) and would have
      made every downstream theorem vacuous on instantiation.  They are now fixed to the
      ambient `enc`/`prg`.  See `ComputationalSemantics/PolyTime.lean`.
-3. `Mic09Lemma2General` — that every `𝖦`-preserving key renaming is reachable from LM18's
-   two generators.  `PrgRenameRel` takes the generators as the *definition*, which is what
-   the proofs consume, so nothing depends on this; but it means LM18 Lemma 2 is proved for
-   renamings *built from* the generators rather than for an arbitrary `𝖦`-preserving map.
-   The factorisation half of [Mic09, Lemma 2] **is** proved
-   (`gPreserving_eq_substKeys`, `gPreserving_ext`, `rootsOf_keySubterms`), as is the fact
-   that each generator is an instance of it — see
-   `Expression/Lemmas/PseudorandomRenaming.lean`.
+3. [Mic09, Lemma 2] is proved except for one case.  The factorisation half
+   (`gPreserving_eq_substKeys`, `gPreserving_ext`, `rootsOf_keySubterms`) and the generation
+   direction for renamings that move the occurring keys onto *fresh* variables
+   (`prgRenameRel_of_freshRenaming`), hence for the rename-then-grow composite LM18 uses
+   (`prgRenameRel_rename_then_grow`), are all theorems.  Not covered: a renaming that mixes
+   permutation with growth over keys that stay put.  **Nothing depends on this** — the
+   soundness proof only ever *builds* renamings from the generators, never analyses an
+   arbitrary one.  See `Expression/Lemmas/PseudorandomRenaming.lean`.
 4. The bounded-vs-unbounded closure divergence of §4.7, which is sound for the pattern but
    is a real difference from the paper's `𝖦*`.
 
