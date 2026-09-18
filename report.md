@@ -319,16 +319,19 @@ The honest boundary of `garblingSecure`:
      concrete cost model (an inefficient scheme has an inefficient reduction) and would have
      made every downstream theorem vacuous on instantiation.  They are now fixed to the
      ambient `enc`/`prg`.  See `ComputationalSemantics/PolyTime.lean`.
-3. [Mic09, Lemma 2] is proved except for one case.  The factorisation half
+3. ~~[Mic09, Lemma 2]~~ — **no longer an assumption.**  Both directions are proved in
+   `Expression/Lemmas/PseudorandomRenaming.lean`: the factorisation
    (`gPreserving_eq_substKeys`, `gPreserving_ext`, `rootsOf_keySubterms`) and the generation
-   direction for renamings that move the occurring keys onto *fresh* variables
-   (`prgRenameRel_of_freshRenaming`), hence for the rename-then-grow composite LM18 uses
-   (`prgRenameRel_rename_then_grow`), are all theorems.  Not covered: a renaming that mixes
-   permutation with growth over keys that stay put.  **Nothing depends on this** — the
-   soundness proof only ever *builds* renamings from the generators, never analyses an
-   arbitrary one.  See `Expression/Lemmas/PseudorandomRenaming.lean`.
+   direction in full (`prgRenameRel_substKeys_general` — every injective renaming of the
+   roots with pairwise independent images is reachable from LM18's two generators, with no
+   freshness hypothesis).  So the generators are exhaustive and `PrgRenameRel` loses nothing
+   by taking them as its definition.
 4. The bounded-vs-unbounded closure divergence of §4.7, which is sound for the pattern but
    is a real difference from the paper's `𝖦*`.
+
+So on the symbolic side nothing is assumed beyond §4.7's closure divergence; the two
+remaining genuine assumptions (items 1 and 2) are the cryptographic hardness of the
+primitives and the efficiency of the IND-CPA reduction.
 
 ## 7. Verification
 

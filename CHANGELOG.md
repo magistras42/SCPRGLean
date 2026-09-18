@@ -3,6 +3,38 @@
 All notable changes to the proofs and code in this repository.
 Section numbers in brackets refer to [`PRGExtension-Analysis.md`](PRGExtension-Analysis.md).
 
+## [2026-09-18] — **[Mic09, Lemma 2] complete**: the mixed case closed
+
+The remaining gap from `[2026-09-17e]` — a renaming that *mixes* permutation of the roots
+with growth of PRG structure over keys that stay put — is closed.  Both directions of
+[Mic09, Lemma 2] now hold for this algebra, so LM18's two generators are **exhaustive** and
+`PrgRenameRel` loses nothing by taking them as the definition.
+
+### Added — `Expression/Lemmas/PseudorandomRenaming.lean`
+
+* **`prgRenameRel_substKeys_general`** — every injective renaming of the roots with pairwise
+  independent images is a pseudorandom key renaming.  **No freshness hypothesis**: `ρ` may
+  send an occurring key to a chain built over another occurring key.
+
+  The proof is the paper's own factorisation.  Shift every occurring root past everything in
+  play — a bijection, hence the `atomic` generator — which makes the renaming fresh, then
+  grow the structure there with `prgRenameRel_of_freshRenaming`.  Formally `ρ` factors as
+  `ρ ∘ r⁻¹` after `r`, with `r n = N + n` on the occurring indices for `N` beyond
+  `keySubterms e` and beyond every variable of every image.
+* `substKeys_comp` — substitutions compose.
+* `keySubterms_substKeys_varK`, `mem_occIdx_substKeys_varK` — renaming the roots renames the
+  occurring variables, so `occIdx (substKeys (K ∘ r) e) = r '' occIdx e`.
+
+### Removed
+
+`prgRenameRel_rename_then_grow`, subsumed by the general theorem.
+
+### Status
+
+The symbolic side of the framework has no remaining gaps.  What is left is the cost semantics
+for `OracleComp`, which would move `EncReductionPolyTime` and `EvalEfficiencyFromPrimitives`
+from assumed to proved, and the §7 refactor.
+
 ## [2026-09-17e] — [Mic09, Lemma 2]: the generation direction proved; the earlier statement was wrong
 
 ### Corrected — the previous `Mic09Lemma2General` was false as stated

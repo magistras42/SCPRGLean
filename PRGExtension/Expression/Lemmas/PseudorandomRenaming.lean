@@ -2,6 +2,7 @@ import PRGExtension.Expression.ComputationalSemantics.Soundness
 import PRGExtension.Expression.Lemmas.ReplacePRG
 import PRGExtension.Expression.Renamings
 import Mathlib.Data.Finset.Image
+import Mathlib.Data.Finset.Union
 
 /-!
 # [Mic09, Lemma 2]: the structure of a pseudorandom key renaming
@@ -25,17 +26,11 @@ This file formalises the factorisation and the correspondence with the generator
 * `substKeys_atomic_compInd`, `substKeys_growOne_compInd` — the computational consequences,
   through `prgRename`.
 
-The converse direction — that a `𝖦`-preserving extension is reachable from the two
-generators — is proved for every renaming that moves the occurring keys onto **fresh**
-variables (`prgRenameRel_of_freshRenaming`), and hence, composing with an arbitrary
-bijection of the roots, for the rename-then-grow form LM18 uses
-(`prgRenameRel_rename_then_grow`).  Its base case needed `exists_perm_extending`: extending
-a finite injection to a permutation of `ℕ`, which Mathlib's `Equiv.extendSubtype` does not
-give because it assumes a `Fintype`.  A renaming that *mixes* permutation and growth over
-keys that stay put is still not covered; see the note at the end of the file.
-
-Nothing in the development depends on the converse: the soundness proof only ever *builds*
-renamings from the generators, never analyses an arbitrary one.
+The converse direction is also proved: **`prgRenameRel_substKeys_general`** — every
+injective renaming of the roots with pairwise independent images is reachable from the two
+generators, with no freshness hypothesis.  So the generators are exhaustive and
+`PrgRenameRel` loses nothing by taking them as the definition.  See the summary at the end
+of the file for how the two steps fit together.
 -/
 
 namespace PRG
@@ -837,23 +832,196 @@ theorem prgRenameRel_rename_then_grow {s : Shape} (e : Expression s)
   PrgRenameRel.trans (prgRenameRel_substKeys_atomic e r hr)
     (prgRenameRel_of_freshRenaming _ _ ρ (le_refl _) hF)
 
+/-- Substitutions compose. -/
+lemma substKeys_comp (σ τ : ℕ → Expression Shape.KeyS) :
+    ∀ {s : Shape} (e : Expression s),
+      substKeys σ (substKeys τ e) = substKeys (fun n => substKeys σ (τ n)) e := by
+  intro s e
+  induction e with
+  | VarK n => rfl
+  | G0 k ih => simp only [substKeys]; rw [ih]
+  | G1 k ih => simp only [substKeys]; rw [ih]
+  | Pair a b ih1 ih2 => simp only [substKeys]; rw [ih1, ih2]
+  | Perm b a c _ ih1 ih2 => simp only [substKeys]; rw [ih1, ih2]
+  | Enc k m ihk ihm => simp only [substKeys]; rw [ihk, ihm]
+  | Hidden k ih => simp only [substKeys]; rw [ih]
+  | BitE b => rfl
+  | Eps => rfl
+
+/-- Renaming the roots renames the occurring variables. -/
+lemma keySubterms_substKeys_varK (r : ℕ → ℕ) :
+    ∀ {s : Shape} (e : Expression s) (m : ℕ),
+      Expression.VarK m ∈ keySubterms (substKeys (fun n => Expression.VarK (r n)) e) ↔
+        ∃ n, Expression.VarK n ∈ keySubterms e ∧ r n = m := by
+  intro s e
+  induction e with
+  | VarK n =>
+      intro m
+      simp only [substKeys, keySubterms, Finset.mem_singleton]
+      constructor
+      · intro h; injection h with h; exact ⟨n, rfl, h.symm⟩
+      · rintro ⟨n', hn', rfl⟩; injection hn' with hn'; rw [hn']
+  | G0 k ih =>
+      intro m
+      simp only [substKeys, keySubterms, Finset.mem_union, Finset.mem_singleton]
+      rw [ih m]
+      constructor
+      · rintro (h | ⟨n, hn, h⟩)
+        · exact absurd h (by simp)
+        · exact ⟨n, Or.inr hn, h⟩
+      · rintro ⟨n, (hn | hn), h⟩
+        · exact absurd hn (by simp)
+        · exact Or.inr ⟨n, hn, h⟩
+  | G1 k ih =>
+      intro m
+      simp only [substKeys, keySubterms, Finset.mem_union, Finset.mem_singleton]
+      rw [ih m]
+      constructor
+      · rintro (h | ⟨n, hn, h⟩)
+        · exact absurd h (by simp)
+        · exact ⟨n, Or.inr hn, h⟩
+      · rintro ⟨n, (hn | hn), h⟩
+        · exact absurd hn (by simp)
+        · exact Or.inr ⟨n, hn, h⟩
+  | Pair a b ih1 ih2 =>
+      intro m
+      simp only [substKeys, keySubterms, Finset.mem_union]
+      rw [ih1 m, ih2 m]
+      constructor
+      · rintro (⟨n, hn, h⟩ | ⟨n, hn, h⟩)
+        exacts [⟨n, Or.inl hn, h⟩, ⟨n, Or.inr hn, h⟩]
+      · rintro ⟨n, (hn | hn), h⟩
+        exacts [Or.inl ⟨n, hn, h⟩, Or.inr ⟨n, hn, h⟩]
+  | Perm b a c _ ih1 ih2 =>
+      intro m
+      simp only [substKeys, keySubterms, Finset.mem_union]
+      rw [ih1 m, ih2 m]
+      constructor
+      · rintro (⟨n, hn, h⟩ | ⟨n, hn, h⟩)
+        exacts [⟨n, Or.inl hn, h⟩, ⟨n, Or.inr hn, h⟩]
+      · rintro ⟨n, (hn | hn), h⟩
+        exacts [Or.inl ⟨n, hn, h⟩, Or.inr ⟨n, hn, h⟩]
+  | Enc k m2 ihk ihm =>
+      intro m
+      simp only [substKeys, keySubterms, Finset.mem_union]
+      rw [ihk m, ihm m]
+      constructor
+      · rintro (⟨n, hn, h⟩ | ⟨n, hn, h⟩)
+        exacts [⟨n, Or.inl hn, h⟩, ⟨n, Or.inr hn, h⟩]
+      · rintro ⟨n, (hn | hn), h⟩
+        exacts [Or.inl ⟨n, hn, h⟩, Or.inr ⟨n, hn, h⟩]
+  | Hidden k ih => intro m; simp only [substKeys, keySubterms]; rw [ih m]
+  | BitE b =>
+      intro m
+      simp only [substKeys, keySubterms]
+      constructor
+      · intro h; simp at h
+      · rintro ⟨n, hn, _⟩; simp [keySubterms] at hn
+  | Eps =>
+      intro m
+      simp only [substKeys, keySubterms]
+      constructor
+      · intro h; simp at h
+      · rintro ⟨n, hn, _⟩; simp [keySubterms] at hn
+
+lemma mem_occIdx_substKeys_varK (r : ℕ → ℕ) {s : Shape} (e : Expression s) (m : ℕ) :
+    m ∈ occIdx (substKeys (fun n => Expression.VarK (r n)) e) ↔ ∃ n ∈ occIdx e, r n = m := by
+  rw [mem_occIdx, keySubterms_substKeys_varK]
+  constructor
+  · rintro ⟨n, hn, h⟩; exact ⟨n, mem_occIdx.mpr hn, h⟩
+  · rintro ⟨n, hn, h⟩; exact ⟨n, mem_occIdx.mp hn, h⟩
+
+/--
+  **[Mic09, Lemma 2], in full: every independent injective renaming of the roots is a
+  pseudorandom key renaming.**
+
+  No freshness hypothesis — `ρ` may send an occurring key to a chain built over another
+  occurring key.  The proof is the paper's factorisation: first move every occurring root to
+  a genuinely new index (the `atomic` generator), which makes the situation fresh, then grow
+  the PRG structure there (`prgRenameRel_of_freshRenaming`).  Formally, `ρ` factors as
+  `ρ ∘ r⁻¹` after `r`, where `r` is the permutation that shifts the occurring indices past
+  everything in play.
+-/
+theorem prgRenameRel_substKeys_general {s : Shape} (e : Expression s)
+    (ρ : ℕ → Expression Shape.KeyS)
+    (hinj : ∀ m ∈ occIdx e, ∀ n ∈ occIdx e, ρ m = ρ n → m = n)
+    (hindep : ∀ m ∈ occIdx e, ∀ n ∈ occIdx e, strictYields (ρ m) (ρ n) = false) :
+    PrgRenameRel e (substKeys ρ e) := by
+  classical
+  -- an index beyond `e` and beyond every variable of every image
+  obtain ⟨N, hN⟩ := exists_fresh_index
+    (keySubterms e ∪ (occIdx e).biUnion (fun n => keySubterms (ρ n)))
+  have hfreshE : ∀ k, N ≤ k → Expression.VarK k ∉ keySubterms e := by
+    intro k hk hc
+    exact hN k hk (Finset.mem_union_left _ hc)
+  have hfreshIm : ∀ k, N ≤ k → ∀ n ∈ occIdx e, Expression.VarK k ∉ keySubterms (ρ n) := by
+    intro k hk n hn hc
+    exact hN k hk (Finset.mem_union_right _ (Finset.mem_biUnion.mpr ⟨n, hn, hc⟩))
+  -- shift the occurring roots past `N`
+  obtain ⟨r, hr, _⟩ := exists_perm_extending (fun n => N + n) (occIdx e)
+    (fun m _ n _ h => Nat.add_left_cancel h)
+    (fun n _ hc => hfreshE (N + n) (by omega) (mem_occIdx.mp hc))
+  set e' := substKeys (fun n => Expression.VarK (r n)) e with he'
+  set σ : ℕ → Expression Shape.KeyS := fun m => ρ (r.symm m) with hσ
+  -- the factorisation
+  have hfactor : substKeys σ e' = substKeys ρ e := by
+    rw [he', substKeys_comp]
+    exact substKeys_congr e (fun n _ => by simp only [substKeys, hσ, Equiv.symm_apply_apply])
+  -- on `e'` the renaming is fresh, so the growth theorem applies
+  have hocc : ∀ m ∈ occIdx e', ∃ n ∈ occIdx e, r n = m := fun m hm =>
+    (mem_occIdx_substKeys_varK (r : ℕ → ℕ) e m).mp hm
+  have hσval : ∀ n ∈ occIdx e, σ (r n) = ρ n := fun n _ => by
+    simp only [hσ, Equiv.symm_apply_apply]
+  have hF : FreshRenaming e' σ := by
+    refine ⟨?_, ?_, ?_⟩
+    · intro m hm k hk
+      obtain ⟨n, hn, rfl⟩ := hocc m hm
+      rw [hσval n hn] at hk
+      intro hc
+      obtain ⟨n', hn', hrn'⟩ := hocc k hc
+      rw [hr n' hn'] at hrn'
+      exact hfreshIm k (by omega) n hn hk
+    · intro m1 hm1 m2 hm2 h
+      obtain ⟨n1, hn1, rfl⟩ := hocc m1 hm1
+      obtain ⟨n2, hn2, rfl⟩ := hocc m2 hm2
+      rw [hσval n1 hn1, hσval n2 hn2] at h
+      rw [hinj n1 hn1 n2 hn2 h]
+    · intro m1 hm1 m2 hm2
+      obtain ⟨n1, hn1, rfl⟩ := hocc m1 hm1
+      obtain ⟨n2, hn2, rfl⟩ := hocc m2 hm2
+      rw [hσval n1 hn1, hσval n2 hn2]
+      exact hindep n1 hn1 n2 hn2
+  rw [← hfactor]
+  exact PrgRenameRel.trans (prgRenameRel_substKeys_atomic e (r : ℕ → ℕ) r.bijective)
+    (prgRenameRel_of_freshRenaming _ e' σ (le_refl _) hF)
+
 /-!
-  ## What [Mic09, Lemma 2] still lacks here
+  ## Summary
 
-  `prgRenameRel_of_freshRenaming` covers every renaming that moves the occurring keys onto
-  *fresh* variables.  Composed with `prgRenameRel_substKeys_atomic` (an arbitrary bijection
-  of the roots, needing no freshness) via `PrgRenameRel.trans`, that is how LM18 uses
-  Lemma 2: rename the roots, then grow the PRG structure.
+  [Mic09, Lemma 2] is now complete for this algebra, in both directions:
 
-  What is not covered is a renaming that mixes the two — one that both permutes occurring
-  keys and grows structure over keys that stay put.  Such a `ρ` should factor as
-  (bijection) ∘ (fresh growth), but the factorisation is not formalised.
+  * **factorisation** — a `𝖦`-preserving map is the unique extension of its restriction to
+    the roots (`gPreserving_eq_substKeys`, `gPreserving_ext`), the roots of a chain-closed
+    key set being its atomic members (`rootsOf_keySubterms`);
+  * **generation** — every injective renaming of the roots with pairwise independent images
+    is reachable from LM18's two generators (`prgRenameRel_substKeys_general`), so
+    `PrgRenameRel` — which *defines* a pseudorandom key renaming by those generators — loses
+    nothing.
 
-  An earlier version of this file stated a single "general" form with the hypothesis
-  "distinct occurring keys receive images with distinct atomic bases".  That hypothesis is
-  **wrong**: `growOne t i j` sends `i` and `j` to `G0(K_t)` and `G1(K_t)`, whose bases are
-  both `t`, so it excluded the very generator it was meant to subsume.  `FreshRenaming`'s
-  `indep` clause — the images are pairwise non-yielding — is the correct reading.
+  The generation direction goes in two steps.  `prgRenameRel_of_freshRenaming` handles the
+  case where the images live over *new* variables, by induction on `∑ keySize (ρ n)`; its
+  base case needs `exists_perm_extending`, since Mathlib's `Equiv.extendSubtype` assumes a
+  `Fintype` and so says nothing about `ℕ`.  `prgRenameRel_substKeys_general` then reduces the
+  general case to that one by the paper's own move: shift every occurring root past
+  everything in play (a bijection, hence the `atomic` generator), which makes the renaming
+  fresh, and grow the structure there.
+
+  A note on the hypotheses: an earlier version of this file stated the general form with
+  *"distinct occurring keys receive images with distinct atomic bases"*.  That is **wrong** —
+  `growOne t i j` sends `i` and `j` to `G0(K_t)` and `G1(K_t)`, whose bases are both `t`, so
+  it excluded the very generator it was meant to subsume.  Pairwise independence of the
+  images (`strictYields (ρ m) (ρ n) = false`) is the correct reading of "a bijection between
+  `Roots(S)` and `Roots(α_K S)`".
 -/
 
 end PRG
