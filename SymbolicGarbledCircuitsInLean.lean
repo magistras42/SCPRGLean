@@ -12,6 +12,7 @@ import PRGExtension.Expression.Lemmas.Renaming
 import PRGExtension.Expression.Lemmas.NormalizeIdempotent
 import PRGExtension.Expression.Lemmas.HideEncrypted
 import PRGExtension.Expression.Lemmas.ReplacePRG
+import PRGExtension.Expression.Lemmas.GStar
 import PRGExtension.Expression.ComputationalSemantics.Def
 import PRGExtension.Expression.ComputationalSemantics.Soundness
 import PRGExtension.Expression.ComputationalSemantics.RenamePreserves

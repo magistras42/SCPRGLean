@@ -326,12 +326,20 @@ The honest boundary of `garblingSecure`:
    roots with pairwise independent images is reachable from LM18's two generators, with no
    freshness hypothesis).  So the generators are exhaustive and `PrgRenameRel` loses nothing
    by taking them as its definition.
-4. The bounded-vs-unbounded closure divergence of §4.7, which is sound for the pattern but
-   is a real difference from the paper's `𝖦*`.
+4. ~~The bounded-vs-unbounded closure divergence~~ — **no longer taken on trust.**
+   `Expression/Lemmas/GStar.lean` proves `prgClosure U base = 𝖦*(base) ∩ U` exactly for a
+   chain-closed bound (`prgClosure_eq_gStar_inter`), and that hiding with the bounded closure
+   yields the *same expression* as hiding with the unbounded `𝖦*`
+   (`adversaryView_eq_gStar`) — so the pattern is the paper's.  The bound itself is forced:
+   `greatestFixpoint` is a constructive recursion on `Finset.card`, so `keyRecovery` must
+   return a `Finset` and `𝖦*({k})` is infinite.  What genuinely differs is membership for
+   keys that do not occur in the expression, which affects no pattern and is exactly what
+   `LabelInvariantIn`'s guard accounts for.
 
-So on the symbolic side nothing is assumed beyond §4.7's closure divergence; the two
-remaining genuine assumptions (items 1 and 2) are the cryptographic hardness of the
-primitives and the efficiency of the IND-CPA reduction.
+So on the symbolic side **nothing is assumed**.  The two remaining genuine assumptions
+(items 1 and 2) are the cryptographic hardness of the primitives and the efficiency of the
+IND-CPA reduction — both on the computational side, and both waiting on a cost semantics for
+`OracleComp`.
 
 ## 7. Verification
 

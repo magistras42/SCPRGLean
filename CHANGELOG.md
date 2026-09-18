@@ -3,6 +3,44 @@
 All notable changes to the proofs and code in this repository.
 Section numbers in brackets refer to [`PRGExtension-Analysis.md`](PRGExtension-Analysis.md).
 
+## [2026-09-18a] — The bounded closure is proved to be LM18's `𝖦*`, restricted
+
+Closes the last symbolic-side item: the two claims that justified the bounded `prgClosure`
+were argued in prose only and are now theorems.
+
+### Added — `Expression/Lemmas/GStar.lean` (new)
+
+* **`GStar S`** — LM18's `𝖦*(S)`, as an inductive predicate.  Genuinely unbounded, hence
+  `Prop`-valued rather than a `Finset`.
+* `keySubterms_closed` — `keySubterms p` is chain-closed: it contains every key subterm of
+  every key it contains.
+* `prgClosure_subset_gStar` / `gStar_inter_subset_prgClosure` — the two inclusions.
+* **`prgClosure_eq_gStar_inter`** — for a chain-closed bound `U` and `base ⊆ U`,
+  `prgClosure U base = 𝖦*(base) ∩ U`, **exactly**; and
+  `prgClosure_keySubterms_eq_gStar`, the instance the development uses.
+* `hideEncryptedS_congr_allParts` — key sets agreeing on `allParts p` hide identically.
+* **`hideEncrypted_prgClosure_eq_gStar`** and **`adversaryView_eq_gStar`** — hiding with the
+  bounded closure yields *the same expression* as hiding with the unbounded `𝖦*`.  So
+  `adversaryView` — the pattern, which is all `symIndistinguishable` compares — is the
+  paper's, not an approximation of it.
+
+### Why the bound is forced, recorded in the module docstring
+
+`adversaryKeys` is a `greatestFixpoint`, and `greatestFixpoint` is a constructive
+Knaster–Tarski iterating downward with `termination_by S.card`.  So `keyRecovery` must be
+`Finset → Finset`, and `𝖦*({k})` is infinite — an unbounded closure cannot be typed there.
+Computability and `#eval` are consequences, not the motivation.
+
+### What remains different, and why it is harmless
+
+Membership for keys that do **not** occur in `p`.  Real rather than hypothetical:
+`scratch/DupTrailing.lean` computes `Garble Dup true`, whose `keySubterms` is `{K₁}` while
+its output labels are `(b, G0 K₀, G0 K₁)` and `(b, G1 K₀, G1 K₁)` — LM18 recovers exactly
+one key of each pair, the bounded closure recovers neither.  That is why `LabelInvariant S`
+was relativised to `LabelInvariantIn U S`.  With `adversaryView_eq_gStar` in hand the
+relativisation is now *justified* rather than merely explained: a key occurring nowhere
+affects no pattern, so the guard costs nothing.
+
 ## [2026-09-18] — **[Mic09, Lemma 2] complete**: the mixed case closed
 
 The remaining gap from `[2026-09-17e]` — a renaming that *mixes* permutation of the roots
