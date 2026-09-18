@@ -1,5 +1,6 @@
 import PRGExtension.Expression.Defs
 import PRGExtension.Expression.SymbolicIndistinguishability
+import PRGExtension.Expression.Lemmas.ReplacePRG
 
 -- Circuits, defined inductively (LM18 §3).  The circuit language itself is independent of
 -- the expression language; what changes in the PRG setting is `labelType`: a wire label

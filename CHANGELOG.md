@@ -3,6 +3,51 @@
 All notable changes to the proofs and code in this repository.
 Section numbers in brackets refer to [`PRGExtension-Analysis.md`](PRGExtension-Analysis.md).
 
+## [2026-09-17c] — [Mic09, Lemma 2]: factorisation of a pseudorandom key renaming
+
+### Added — `Expression/Lemmas/PseudorandomRenaming.lean` (new)
+
+`PrgRenameRel` *defines* a pseudorandom key renaming by LM18's two generators, because that
+is what the soundness proof consumes.  [Mic09, Lemma 2] is the symbolic result behind the
+definition — every `𝖦`-preserving `α_K : S → 𝐊*` is the unique extension of a bijection
+between `Roots(S)` and `Roots(α_K S)` — and was previously not formalised at all.
+
+* `substKeys ρ` — substitution of a key expression for each atomic key variable.
+* `GPreserving α` — `α ∘ G_b = G_b ∘ α`.
+* **`gPreserving_eq_substKeys`** — a `𝖦`-preserving map *is* `substKeys` of its restriction
+  to the atomic keys, and **`gPreserving_ext`** — two such maps agreeing there are equal.
+  Together: existence and uniqueness of the extension, which is [Mic09, Lemma 2]'s first
+  half.
+* **`rootsOf_keySubterms`** — the roots of a chain-closed key set are exactly its atomic
+  members.  This is what makes "determined on `Roots(S)`" the same statement as "determined
+  on the atomic keys", so the factorisation above is the paper's.
+* `growOne t i j` — the leaf substitution sending `K_i ↦ G0(K_t)`, `K_j ↦ G1(K_t)`: the
+  inverse of one `idealize` hop, expressed as a map on the roots.  `rp_substKeys_growOne`
+  proves the round trip `replacePRG (K_t) i j ∘ substKeys (growOne t i j) = id`, with the
+  side conditions discharged by `keySubterms_substKeys_growOne` and
+  `exprKeys_substKeys_growOne_no_t`.
+* **`prgRenameRel_substKeys_atomic`** and **`prgRenameRel_substKeys_growOne`** — each of the
+  two generators is such an extension.  (The first needed `applyBitRenaming_id` and
+  `substKeys_varK` to identify `substKeys (K ∘ r)` with `applyVarRenaming`.)
+* `substKeys_atomic_compInd`, `substKeys_growOne_compInd` — the computational consequences,
+  through `prgRename`.
+
+### Not proved — `Mic09Lemma2General`
+
+The converse direction: that *every* `𝖦`-preserving extension is reachable from the two
+generators.  Stated as a named `Prop` with the intended argument (iterate `growOne`,
+shortening `∑ keySize (ρ n)`) and an explicit warning that its hypothesis is this
+formalisation's reading of "a bijection between `Roots(S)` and `Roots(α_K S)`" and has not
+been checked to be exactly right.  **Nothing depends on it**: the soundness proof only ever
+builds renamings from the generators, never analyses an arbitrary one.
+
+### Moved
+
+`keySubterms_self`, `keySubterms_of_G0`, `keySubterms_of_G1` from
+`Garbling/SymbolicHiding/GarbleHole.lean` to `Expression/Lemmas/ReplacePRG.lean` — they are
+generic expression-layer facts and are now needed on both sides.  `Garbling/Circuits.lean`
+imports `ReplacePRG` so the Garbling layer still sees them.
+
 ## [2026-09-17b] — `PRGExtension/Garbling` restructured to mirror the original
 
 Pure refactor: files moved and merged, **no proof changed**.  The declaration set is

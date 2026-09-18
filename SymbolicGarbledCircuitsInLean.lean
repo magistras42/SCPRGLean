@@ -36,6 +36,7 @@ import VCVio2.VCVio.OracleComp.DistSemantics.EvalDist
 import PRGExtension.Expression.ComputationalSemantics.SoundnessProof.HidingOneKeyGen
 import PRGExtension.Expression.ComputationalSemantics.SoundnessProof.FixpointStep
 import PRGExtension.Expression.ComputationalSemantics.PolyTime
+import PRGExtension.Expression.Lemmas.PseudorandomRenaming
 
 import PRGExtension.Garbling.Circuits
 import PRGExtension.Garbling.GarblingDef

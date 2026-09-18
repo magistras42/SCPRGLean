@@ -292,17 +292,34 @@ with a pseudorandom key renaming; that argument is now formalised.
 The honest boundary of `garblingSecure`:
 
 1. `encryptionSchemeIndCpa` and `prgSchemeSecure` — the standard cryptographic assumptions.
-2. `Hreduction` and `HreductionPrg` — that the two reductions are polynomial time. These are
-   **asserted as hypotheses, not verified against a cost model**; `IsPolyTime` is an abstract
-   predicate closed under composition.
-3. `PrgRenameRel` takes LM18's generators (`atomic`, `idealize`) as the *definition* of a
-   pseudorandom key renaming. The purely symbolic factorisation result
-   ([Mic09, Lemma 2] — that every `𝖦`-preserving map arises this way) is not formalised; the
-   *computational* content of LM18 Lemma 2 is `prgRename`, which is proved.
+2. `EncReductionPolyTime IsPolyTime enc prg` — that the **IND-CPA** reduction, for the
+   scheme at hand, runs in polynomial time.  Assumed; the informal cost argument (including
+   the `G0`/`G1` cases) is at the end of `HidingOneKey.lean`.  It cannot currently be proved:
+   `reductionToOracle` recurses over the expression making oracle queries, so the structural
+   decomposition would need closure under sequencing *two oracle computations*, and
+   `PolyFamOracleCompPred` provides no such primitive — there is no cost semantics for
+   `OracleComp` here or in the oracle-computation library.
+   * `PrgReductionPolyTime` is **not** assumed — it is derived
+     (`reductionToPrgOracle_polyTime`) from `EfficientEvalPrg` plus the framework's own
+     composition closure, because the PRG reduction is exactly "sample an environment, query
+     once, evaluate" (`reductionToPrgOracle_decompose`).
+   * `EfficientPrg` / `EfficientEnc` / `EfficientEvalPrg` state LM18 Definition 1's
+     efficiency requirement, which the inherited model omitted entirely — `prgFunctions` was
+     an arbitrary pair of functions with no tie to `IsPolyTime`.
+   * Both hypotheses used to be quantified over **all** schemes, which is false in any
+     concrete cost model (an inefficient scheme has an inefficient reduction) and would have
+     made every downstream theorem vacuous on instantiation.  They are now fixed to the
+     ambient `enc`/`prg`.  See `ComputationalSemantics/PolyTime.lean`.
+3. `Mic09Lemma2General` — that every `𝖦`-preserving key renaming is reachable from LM18's
+   two generators.  `PrgRenameRel` takes the generators as the *definition*, which is what
+   the proofs consume, so nothing depends on this; but it means LM18 Lemma 2 is proved for
+   renamings *built from* the generators rather than for an arbitrary `𝖦`-preserving map.
+   The factorisation half of [Mic09, Lemma 2] **is** proved
+   (`gPreserving_eq_substKeys`, `gPreserving_ext`, `rootsOf_keySubterms`), as is the fact
+   that each generator is an instance of it — see
+   `Expression/Lemmas/PseudorandomRenaming.lean`.
 4. The bounded-vs-unbounded closure divergence of §4.7, which is sound for the pattern but
    is a real difference from the paper's `𝖦*`.
-
----
 
 ## 7. Verification
 

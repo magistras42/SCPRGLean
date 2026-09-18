@@ -335,4 +335,57 @@ lemma exists_fresh_index (S : Finset (Expression Shape.KeyS)) :
   rw [Finset.mem_range] at h2
   omega
 
+/-! ## Generic `keySubterms` facts, shared by both layers -/
+
+/-- Every key expression is one of its own key subterms. -/
+lemma keySubterms_self : ∀ k : Expression Shape.KeyS, k ∈ keySubterms k
+  | Expression.VarK _ => by simp [keySubterms]
+  | Expression.G0 _ => by simp [keySubterms]
+  | Expression.G1 _ => by simp [keySubterms]
+/-- `keySubterms` is subterm-closed through `G0`/`G1`. -/
+lemma keySubterms_of_G0 {s : Shape} {p : Expression s} {k : Expression Shape.KeyS}
+    (h : Expression.G0 k ∈ keySubterms p) : k ∈ keySubterms p := by
+  induction p with
+  | Pair p1 p2 ih1 ih2 =>
+      simp only [keySubterms, Finset.mem_union] at h ⊢; exact h.imp ih1 ih2
+  | Perm bb p1 p2 _ ih1 ih2 =>
+      simp only [keySubterms, Finset.mem_union] at h ⊢; exact h.imp ih1 ih2
+  | Enc kk e ih1 ih2 =>
+      simp only [keySubterms, Finset.mem_union] at h ⊢; exact h.imp ih1 ih2
+  | Hidden kk ih => simp only [keySubterms] at h ⊢; exact ih h
+  | G0 e ih =>
+      simp only [keySubterms, Finset.mem_union, Finset.mem_singleton] at h ⊢
+      rcases h with h | h
+      · right; rw [Expression.G0.injEq] at h; rw [← h]; exact keySubterms_self k
+      · exact Or.inr (ih h)
+  | G1 e ih =>
+      simp only [keySubterms, Finset.mem_union, Finset.mem_singleton] at h ⊢
+      rcases h with h | h
+      · exact absurd h (by simp)
+      · exact Or.inr (ih h)
+  | _ => simp [keySubterms] at h ⊢
+
+lemma keySubterms_of_G1 {s : Shape} {p : Expression s} {k : Expression Shape.KeyS}
+    (h : Expression.G1 k ∈ keySubterms p) : k ∈ keySubterms p := by
+  induction p with
+  | Pair p1 p2 ih1 ih2 =>
+      simp only [keySubterms, Finset.mem_union] at h ⊢; exact h.imp ih1 ih2
+  | Perm bb p1 p2 _ ih1 ih2 =>
+      simp only [keySubterms, Finset.mem_union] at h ⊢; exact h.imp ih1 ih2
+  | Enc kk e ih1 ih2 =>
+      simp only [keySubterms, Finset.mem_union] at h ⊢; exact h.imp ih1 ih2
+  | Hidden kk ih => simp only [keySubterms] at h ⊢; exact ih h
+  | G0 e ih =>
+      simp only [keySubterms, Finset.mem_union, Finset.mem_singleton] at h ⊢
+      rcases h with h | h
+      · exact absurd h (by simp)
+      · exact Or.inr (ih h)
+  | G1 e ih =>
+      simp only [keySubterms, Finset.mem_union, Finset.mem_singleton] at h ⊢
+      rcases h with h | h
+      · right; rw [Expression.G1.injEq] at h; rw [← h]
+        cases k <;> simp [keySubterms]
+      · exact Or.inr (ih h)
+  | _ => simp [keySubterms] at h ⊢
+
 end PRG
