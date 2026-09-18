@@ -3,6 +3,44 @@
 All notable changes to the proofs and code in this repository.
 Section numbers in brackets refer to [`PRGExtension-Analysis.md`](PRGExtension-Analysis.md).
 
+## [2026-09-18b] — `normalizeExpr` now recurses into the key positions
+
+Removes a latent trap.  `normalizeExpr` left `Enc`'s key, `Hidden`'s key, and `G0`/`G1`
+untouched.  That is harmless today — `Expression 𝕂` has only `VarK`, `G0`, `G1`, so a key
+contains no bit expression and normalising one is the identity — but it is fragile in a
+specific and unpleasant way: `normalizeExpr` is part of the *definition* of
+`symIndistinguishable`.  Under-normalising would make that relation too **strong**, so
+soundness would survive (a weaker theorem, still true) while **LM18 Theorem 5 could become
+false**, since Theorem 5 is the side that has to establish indistinguishability.  A key
+former mentioning bits would trigger exactly that, silently.
+
+### Changed — `Expression/SymbolicIndistinguishability.lean`
+
+```
+| Expression.G0 k     => Expression.G0 (normalizeExpr k)          -- new
+| Expression.G1 k     => Expression.G1 (normalizeExpr k)          -- new
+| Expression.Enc k e  => Expression.Enc (normalizeExpr k) (normalizeExpr e)
+| Expression.Hidden k => Expression.Hidden (normalizeExpr k)      -- new
+```
+
+### Added
+
+* **`normalizeExpr_key`** (`@[simp]`) — normalising a key expression is the identity.
+* `normalizeExpr_enc`, `normalizeExpr_hidden` (`@[simp]`) — the equations as they read
+  *before* the change, so downstream proofs are unaffected.
+
+### Fallout
+
+One call site: `nand_pattern_sim`'s `simp only` list in
+`Garbling/SymbolicHiding/GarbleHoleBitSwap.lean` needed `normalizeExpr_key` added.  Nothing
+else in the development noticed.
+
+### Verification
+
+The four new equations hold by `rfl`; `normalizeExpr (Enc k e) = Enc k (normalizeExpr e)`
+still holds `by simp`; and `normalizeIdempotent`, `normalizeExprToDistr`, `theorem5` and
+`garblingSecureFromEfficiency` have unchanged axiom footprints.
+
 ## [2026-09-18a] — The bounded closure is proved to be LM18's `𝖦*`, restricted
 
 Closes the last symbolic-side item: the two claims that justified the bounded `prgClosure`

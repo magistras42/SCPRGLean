@@ -349,11 +349,16 @@ These do not weaken the theorem; they mean it is about a very slightly different
   `𝖤(σ(k), 0^{|s|})`. A fixed public constant either way. The length is pinned by
   unification rather than an explicit `shapeLength` argument, which makes some goals harder
   to read.
-* `normalizeExpr` does not recurse into `Enc`'s key or into `Hidden`. Harmless because
-  `Expression 𝕂` has only the constructors `VarK`, `G0`, `G1` — no `Enc`, no `Hidden`, no
-  `BitE` — which is also what makes `hideEncrypted_key`, `encKeys_key`, `extractKeys_key`
-  and `exprKeys_key` true. It would break silently if the language gained a key former
-  mentioning bits or encryptions.
+* ~~`normalizeExpr` does not recurse into `Enc`'s key or into `Hidden`.~~ **Fixed
+  (2026-09-18b).** It now recurses into `Enc`'s key, `Hidden`'s key and `G0`/`G1`.  This was
+  provably a no-op — `normalizeExpr_key` shows normalising a key is the identity — but
+  `normalizeExpr` is part of the definition of `symIndistinguishable`, so under-normalising
+  would have made that relation too *strong* and could have broken LM18 Theorem 5 (not
+  soundness) had the language gained a key former mentioning bits.
+
+  The invariant it rested on is still worth knowing, because `hideEncrypted_key`,
+  `encKeys_key`, `extractKeys_key` and `exprKeys_key` all depend on it: `Expression 𝕂` has
+  only the constructors `VarK`, `G0`, `G1` — no `Enc`, no `Hidden`, no `BitE`.
 
 ### 6.4 Previously assumed, now proved
 

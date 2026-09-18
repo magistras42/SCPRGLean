@@ -41,8 +41,34 @@ def normalizeExpr {s : Shape} (p : Expression s) : Expression s :=
       Expression.Perm (Expression.BitE b'') p2' p1'
     | BitExpr.VarB k => Expression.Perm (Expression.BitE (BitExpr.VarB k)) p1' p2'
   | Expression.Pair p1 p2 => Expression.Pair  (normalizeExpr p1) (normalizeExpr p2)
-  | Expression.Enc k e => Expression.Enc k (normalizeExpr e)
+  -- Recursing into the *key* positions as well.  On today's algebra this is a no-op —
+  -- `Expression 𝕂` has only `VarK`, `G0`, `G1`, so a key contains no bit expression and
+  -- `normalizeExpr_key` below shows normalising one is the identity.  It is written
+  -- recursively anyway so that `symIndistinguishable` cannot silently become *too strong*
+  -- if the language ever gains a key former that mentions bits: a pattern differing only by
+  -- an unnormalised bit inside a key would then be judged distinguishable, which would break
+  -- LM18 Theorem 5 rather than soundness.
+  | Expression.G0 k => Expression.G0 (normalizeExpr k)
+  | Expression.G1 k => Expression.G1 (normalizeExpr k)
+  | Expression.Enc k e => Expression.Enc (normalizeExpr k) (normalizeExpr e)
+  | Expression.Hidden k => Expression.Hidden (normalizeExpr k)
   | p => p
+
+/-- Normalising a key expression is the identity: keys contain no bit expressions. -/
+@[simp] lemma normalizeExpr_key : ∀ k : Expression Shape.KeyS, normalizeExpr k = k
+  | Expression.VarK _ => rfl
+  | Expression.G0 c => by rw [normalizeExpr, normalizeExpr_key c]
+  | Expression.G1 c => by rw [normalizeExpr, normalizeExpr_key c]
+
+/-- The equations as they read before the key positions became recursive, so that the
+    downstream proofs are unaffected. -/
+@[simp] lemma normalizeExpr_enc {s : Shape} (k : Expression Shape.KeyS) (e : Expression s) :
+    normalizeExpr (Expression.Enc k e) = Expression.Enc k (normalizeExpr e) := by
+  rw [normalizeExpr, normalizeExpr_key]
+
+@[simp] lemma normalizeExpr_hidden {s : Shape} (k : Expression Shape.KeyS) :
+    normalizeExpr (Expression.Hidden (s := s) k) = Expression.Hidden k := by
+  rw [normalizeExpr, normalizeExpr_key]
 
 -- Part ii. Variable renaming
 

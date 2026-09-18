@@ -258,7 +258,8 @@ lemma nand_pattern_sim (T : Finset (Expression Shape.KeyS)) (li lj : WireLabel) 
     normalizeExpr (hideEncrypted T (sim Circuit.NandC (li, lj) n).1)
       = nandPattern li lj n := by
   simp only [sim, gbEntry, hideEncrypted, hideEncrypted_key, normalizeExpr, normalizeB,
-    nandPattern, WireLabel.bitE, hi1, hi0, hj1, hj0, if_true, if_false, reduceIte]
+    normalizeExpr_key, nandPattern, WireLabel.bitE, hi1, hi0, hj1, hj0,
+    if_true, if_false, reduceIte]
 lemma nand_pattern_gb (S : Finset (Expression Shape.KeyS)) (li lj : WireLabel) (n : ℕ)
     (f : ℕ → Bool) (vi vj : Bool)
     (hfi : f li.bit = vi) (hfj : f lj.bit = vj) (hfn : f n = !(vi && vj))
