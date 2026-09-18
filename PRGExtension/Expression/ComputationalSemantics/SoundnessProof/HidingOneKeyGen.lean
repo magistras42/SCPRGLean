@@ -41,12 +41,9 @@ lemma keySize_pos : ∀ k : Expression Shape.KeyS, 1 ≤ keySize k
 theorem hideOneKeyGen
   (IsPolyTime : PolyFamOracleCompPred)
   (HPolyTime : PolyTimeClosedUnderComposition (fun {_ _ _} => IsPolyTime))
-  (Hreduction : ∀ enc prg shape (expr : Expression shape) key₀,
-    IsPolyTime (reductionHidingOneKey enc prg expr key₀))
-  (HreductionPrg : ∀ (enc_ : encryptionScheme) (prg_ : prgScheme) (s_ : Shape)
-    (expr_ : Expression s_) (targetSeed_ : Expression Shape.KeyS) (idx0_ idx1_ : ℕ),
-    IsPolyTime (fun κ => reductionToPrgOracle enc_ prg_ expr_ targetSeed_ idx0_ idx1_ κ))
   (enc : encryptionScheme) (prg : prgScheme)
+  (Hreduction : EncReductionPolyTime IsPolyTime enc prg)
+  (HreductionPrg : PrgReductionPolyTime IsPolyTime enc prg)
   (HEncIndCpa : encryptionSchemeIndCpa (fun {_ _ _} => IsPolyTime) enc)
   (HPrgSecure : prgSchemeSecure (fun {_ _ _} => IsPolyTime) prg) :
   ∀ (n : ℕ) {shape : Shape} (expr : Expression shape) (k : Expression Shape.KeyS),
@@ -68,7 +65,7 @@ theorem hideOneKeyGen
           cases k with
           | VarK m =>
               exact symbolicToSemanticIndistinguishabilityHidingOneKey IsPolyTime HPolyTime
-                Hreduction enc HEncIndCpa expr m Hk Hdesc
+                enc prg Hreduction HEncIndCpa expr m Hk Hdesc
           | G0 _ => simp [isAtomicKey] at hat
           | G1 _ => simp [isAtomicKey] at hat
       | false =>
@@ -90,7 +87,7 @@ theorem hideOneKeyGen
           obtain ⟨hmjE, hmjK⟩ := hmj
           -- hop 1
           have hop1 := symbolicToSemanticIndistinguishabilityPrgIdealization IsPolyTime
-            HPolyTime HreductionPrg enc prg HPrgSecure expr t i j Hseed hij hmiE hmjE
+            HPolyTime enc prg HreductionPrg HPrgSecure expr t i j Hseed hij hmiE hmjE
           -- the shortened key and the idealised expression
           have hsize : keySize (rp t i j k) + 1 = keySize k := keySize_rp i j k hat
           have havoid : ∀ a ∈ exprKeys expr, Expression.VarK i ∉ keySubterms a
@@ -141,7 +138,7 @@ theorem hideOneKeyGen
           have hshrink : keySubterms (removeOneKey k expr) ⊆ keySubterms expr :=
             keySubtermsMonotone _ _ (hideEncryptedSSmallerValue _ _)
           have hop2 := symbolicToSemanticIndistinguishabilityPrgIdealization IsPolyTime
-            HPolyTime HreductionPrg enc prg HPrgSecure (removeOneKey k expr) t i j
+            HPolyTime enc prg HreductionPrg HPrgSecure (removeOneKey k expr) t i j
             (by
               intro hc
               have : Expression.VarK t ∈ exprKeys expr :=

@@ -24,12 +24,9 @@ namespace PRG
 def hidingGenMotive (z : Finset (Expression Shape.KeyS)) : Prop :=
   ∀ (IsPolyTime : PolyFamOracleCompPred)
     (_HPolyTime : PolyTimeClosedUnderComposition (fun {_ _ _} => IsPolyTime))
-    (_Hreduction : ∀ enc prg shape (expr : Expression shape) (key₀ : ℕ),
-      IsPolyTime (reductionHidingOneKey enc prg expr key₀))
-    (_HreductionPrg : ∀ (enc_ : encryptionScheme) (prg_ : prgScheme) (s_ : Shape)
-      (expr_ : Expression s_) (targetSeed_ : Expression Shape.KeyS) (idx0_ idx1_ : ℕ),
-      IsPolyTime (fun κ => reductionToPrgOracle enc_ prg_ expr_ targetSeed_ idx0_ idx1_ κ))
     (enc : encryptionScheme) (prg : prgScheme)
+    (_Hreduction : EncReductionPolyTime IsPolyTime enc prg)
+    (_HreductionPrg : PrgReductionPolyTime IsPolyTime enc prg)
     (_HEncIndCpa : encryptionSchemeIndCpa (fun {_ _ _} => IsPolyTime) enc)
     (_HPrgSecure : prgSchemeSecure (fun {_ _ _} => IsPolyTime) prg)
     {shape : Shape} (expr : Expression shape)
@@ -52,7 +49,7 @@ theorem hidingGen (z : Finset (Expression Shape.KeyS)) : hidingGenMotive z := by
     simp only [Finset.coe_empty, emptyHide]
     apply indRfl
   case insert key keySet Hkey Hkey2 HkeyFresh Hind =>
-    intro IsPolyTime HPolyTime Hreduction HreductionPrg enc prg HEncIndCpa HPrgSecure
+    intro IsPolyTime HPolyTime enc prg Hreduction HreductionPrg HEncIndCpa HPrgSecure
       shape expr Hexpr Hroot Hdesc
     have Hnot : key ∉ extractKeys expr := by
       intro Hcontr
@@ -76,7 +73,7 @@ theorem hidingGen (z : Finset (Expression Shape.KeyS)) : hidingGenMotive z := by
         if Ha : a = key then subst a; tauto else tauto
       rw [Heq]
       apply indSym
-      refine Hind IsPolyTime HPolyTime Hreduction HreductionPrg enc prg HEncIndCpa HPrgSecure
+      refine Hind IsPolyTime HPolyTime enc prg Hreduction HreductionPrg HEncIndCpa HPrgSecure
         _ ?_ ?_ ?_
       · simp only [removeOneKeyProper] at *
         rw [<-Heq, Finset.inter_comm]
@@ -87,7 +84,7 @@ theorem hidingGen (z : Finset (Expression Shape.KeyS)) : hidingGenMotive z := by
       · exact fun k hk k' hk' =>
           Hdesc k (Finset.mem_insert_of_mem hk) k' (Hsub Hnot hk')
     · simp only [removeOneKeyProper, removeOneKey] at *
-      exact hideOneKeyGen IsPolyTime HPolyTime Hreduction HreductionPrg enc prg HEncIndCpa
+      exact hideOneKeyGen IsPolyTime HPolyTime enc prg Hreduction HreductionPrg HEncIndCpa
         HPrgSecure (keySize key) expr key (le_refl _) Hnot
         (Hroot key (Finset.mem_insert_self key keySet))
         (Hdesc key (Finset.mem_insert_self key keySet))
@@ -145,12 +142,9 @@ lemma hideSelectedRestrictEnc {s : Shape} (S : Set (Expression Shape.KeyS)) (p :
 theorem fixpointStepSound
     (IsPolyTime : PolyFamOracleCompPred)
     (HPolyTime : PolyTimeClosedUnderComposition (fun {_ _ _} => IsPolyTime))
-    (Hreduction : ∀ enc prg shape (expr : Expression shape) (key₀ : ℕ),
-      IsPolyTime (reductionHidingOneKey enc prg expr key₀))
-    (HreductionPrg : ∀ (enc_ : encryptionScheme) (prg_ : prgScheme) (s_ : Shape)
-      (expr_ : Expression s_) (targetSeed_ : Expression Shape.KeyS) (idx0_ idx1_ : ℕ),
-      IsPolyTime (fun κ => reductionToPrgOracle enc_ prg_ expr_ targetSeed_ idx0_ idx1_ κ))
     (enc : encryptionScheme) (prg : prgScheme)
+    (Hreduction : EncReductionPolyTime IsPolyTime enc prg)
+    (HreductionPrg : PrgReductionPolyTime IsPolyTime enc prg)
     (HEncIndCpa : encryptionSchemeIndCpa (fun {_ _ _} => IsPolyTime) enc)
     (HPrgSecure : prgSchemeSecure (fun {_ _ _} => IsPolyTime) prg) :
     FixpointStepSound (fun {_ _ _} => IsPolyTime) enc prg := by
@@ -216,7 +210,7 @@ theorem fixpointStepSound
     simp only [Set.mem_inter_iff, Set.mem_compl_iff, Finset.mem_coe, Finset.mem_sdiff,
       not_and, not_not]
     exact ⟨fun h => h.1 h.2, fun h => ⟨fun _ => h, Hz h⟩⟩
-  have Zstep := hidingGen W IsPolyTime HPolyTime Hreduction HreductionPrg enc prg
+  have Zstep := hidingGen W IsPolyTime HPolyTime enc prg Hreduction HreductionPrg
     HEncIndCpa HPrgSecure v Hdisj Hroot Hdesc
   rw [Hrw] at Zstep
   exact Zstep

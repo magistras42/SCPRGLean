@@ -1161,6 +1161,19 @@ def reductionHidingOneKey (enc : encryptionScheme) (prg : prgScheme) {shape : Sh
       let out <- reductionToOracle (enc κ) (prg κ) (extendFin ones kVars) (extendFin false bVars) e key₀
       return out
 
+/--
+  **The IND-CPA reduction, for the scheme at hand, runs in polynomial time.**
+
+  Note the quantifiers: `enc` and `prg` are *fixed*.  The inherited signature quantified over
+  all schemes, which is strictly stronger and false in any concrete cost model — an
+  inefficient scheme has an inefficient reduction — so every theorem downstream would have
+  become vacuous on instantiation.  See `ComputationalSemantics/PolyTime.lean`.
+-/
+def EncReductionPolyTime (IsPolyTime : PolyFamOracleCompPred)
+    (enc : encryptionScheme) (prg : prgScheme) : Prop :=
+  ∀ (shape : Shape) (expr : Expression shape) (key₀ : ℕ),
+    IsPolyTime (reductionHidingOneKey enc prg expr key₀)
+
 lemma reductionToOracleEqInner (way : Side) (key₀ : ℕ) (enc : encryptionScheme) (prg : prgScheme)
   {shape : Shape} (e : Expression shape):
     OracleComp.simulateQ (addRandom ((seededIndCpaOracleImpl way enc).queryImpl κ seed))
@@ -1286,8 +1299,9 @@ lemma reductionToOracleEq2 (key₀ : ℕ) (enc : encryptionScheme) (prg : prgSch
 
 theorem symbolicToSemanticIndistinguishabilityHidingOneKey
   (IsPolyTime : PolyFamOracleCompPred) (HPolyTime : PolyTimeClosedUnderComposition IsPolyTime)
-  (Hreduction : forall enc prg shape (expr : Expression shape) key₀, IsPolyTime (reductionHidingOneKey enc prg expr key₀))
-  (enc : encryptionScheme) (HEncIndCpa : encryptionSchemeIndCpa IsPolyTime enc)
+  (enc : encryptionScheme) (prg : prgScheme)
+  (Hreduction : EncReductionPolyTime IsPolyTime enc prg)
+  (HEncIndCpa : encryptionSchemeIndCpa IsPolyTime enc)
   {shape : Shape} (expr : Expression shape)
   -- CHANGE HERE: We restrict the theorem to base keys (key₀ : ℕ)
   (key₀ : ℕ) (Hk : Expression.VarK key₀ ∉ extractKeys expr)
@@ -1389,6 +1403,43 @@ harmless since e is fixed.
 However, if we additionally assume (as is common in practice) that the encryption scheme
 produces outputs of length polynomial in κ + n, then the exponent becomes independent of |e|
 and equal to the degree of p.
+
+--------------------------------------------------------------------------------------
+ADDENDUM (2026-09-17): the PRG cases, which the analysis above predates.
+
+`reductionToOracle` gained two constructors when the algebra gained the PRG:
+
+  | Expression.G0 e => do  let e' ← reductionToOracle … e key₀;  return prg.prg0 e'
+  | Expression.G1 e => …   symmetrically
+
+Output length.  Both `prg0` and `prg1` map a κ-bit seed to a κ-bit string, so the produced
+length is κ — the same as the `𝕂` base case — regardless of the sub-expression.  The
+induction on shapes above is therefore unaffected: no new length bound is introduced.
+
+Running time.  Each `G` node adds one application of `prg0`/`prg1` to a κ-bit input.  By
+LM18 Definition 1 that costs some fixed polynomial in κ, which is where the hypothesis
+`EfficientPrg` (in `ComputationalSemantics/PolyTime.lean`) is needed — the inherited model
+placed no requirement on `prgFunctions` at all, so this step had no justification.  Since
+there are at most |e| such nodes, the total added cost is |e| · poly(κ).
+
+Note also that the target key is *atomic* by construction (`hideOneKeyGen` only ever hands
+`reductionToOracle` a `VarK`), so the reduction never has to evaluate a `G`-chain over the
+unknown key — which it could not do, since it does not know it.  That is the computational
+reason for `seedFree`.
+
+--------------------------------------------------------------------------------------
+The PRG reduction, `reductionToPrgOracle`.
+
+This one needs no induction.  It is, literally,
+
+  sample 2·l environment values;  query the oracle once;  evaluate a fixed expression
+
+(`reductionToPrgOracle_decompose`), so its cost is the cost of sampling l·(κ+1) bits, one
+oracle call, and one `evalExpr` on an expression of size |e|.  With `EfficientEnc` and
+`EfficientPrg` the last of these is polynomial in κ, and the framework's own
+`PolyTimeClosedUnderComposition` then discharges the whole claim — see
+`reductionToPrgOracle_polyTime`.  Unlike `EncReductionPolyTime`, `PrgReductionPolyTime` is
+therefore a theorem rather than a hypothesis.
 -/
 
 end PRG

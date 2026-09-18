@@ -61,9 +61,8 @@ inductive PrgRenameRel {s : Shape} : Expression s → Expression s → Prop
 theorem prgRename
   (IsPolyTime : PolyFamOracleCompPred)
   (HPolyTime : PolyTimeClosedUnderComposition (fun {_ _ _} => IsPolyTime))
-  (HreductionPrg : forall (enc_ : encryptionScheme) (prg_ : prgScheme) (s_ : Shape) (expr_ : Expression s_) (targetSeed_ : Expression Shape.KeyS) (idx0_ idx1_ : ℕ),
-    IsPolyTime (fun κ => reductionToPrgOracle enc_ prg_ expr_ targetSeed_ idx0_ idx1_ κ))
   (enc : encryptionScheme) (prg : prgScheme)
+  (HreductionPrg : PrgReductionPolyTime IsPolyTime enc prg)
   (HPrgSecure : prgSchemeSecure (fun {_ _ _} => IsPolyTime) prg)
   {shape : Shape} {e1 e2 : Expression shape} (H : PrgRenameRel e1 e2) :
   CompIndistinguishabilityDistr (fun {_ _ _} => IsPolyTime)
@@ -75,19 +74,16 @@ theorem prgRename
       apply indRfl
   | idealize e t idx0 idx1 H_seed H_diff H0 H1 =>
       exact symbolicToSemanticIndistinguishabilityPrgIdealization IsPolyTime HPolyTime
-        HreductionPrg enc prg HPrgSecure e t idx0 idx1 H_seed H_diff H0 H1
+        enc prg HreductionPrg HPrgSecure e t idx0 idx1 H_seed H_diff H0 H1
   | symm _ ih => exact indSym ih
   | trans _ _ ih1 ih2 => exact indTrans _ ih1 ih2
 
 theorem symbolicToSemanticIndistinguishability
   (IsPolyTime : PolyFamOracleCompPred)
   (HPolyTime : PolyTimeClosedUnderComposition (fun {_ _ _} => IsPolyTime))
-  (Hreduction : ∀ (enc : encryptionScheme) (prg : prgScheme) (shape : Shape) (expr : Expression shape) (key₀ : ℕ),
-    IsPolyTime (reductionHidingOneKey enc prg expr key₀))
-  (HreductionPrg : forall (enc_ : encryptionScheme) (prg_ : prgScheme) (s_ : Shape) (expr_ : Expression s_) (targetSeed_ : Expression Shape.KeyS) (idx0_ idx1_ : ℕ),
-    IsPolyTime (fun κ => reductionToPrgOracle enc_ prg_ expr_ targetSeed_ idx0_ idx1_ κ))
-  (enc : encryptionScheme)
-  (prg : prgScheme)
+  (enc : encryptionScheme) (prg : prgScheme)
+  (Hreduction : EncReductionPolyTime IsPolyTime enc prg)
+  (HreductionPrg : PrgReductionPolyTime IsPolyTime enc prg)
   (HEncIndCpa : encryptionSchemeIndCpa (fun {_ _ _} => IsPolyTime) enc)
   (HPrgSecure : prgSchemeSecure (fun {_ _ _} => IsPolyTime) prg)
   {shape : Shape} (expr1 expr2 : Expression shape)
@@ -114,11 +110,11 @@ theorem symbolicToSemanticIndistinguishability
   -- Computational Transitivity Hop 1: expr1 ≈ adversaryView expr1
   apply indTrans (fun {I Spec Output} ↦ IsPolyTime)
   -- HOP 1: Prove expr1 ≈ adversaryView expr1
-  exact symbolicToSemanticIndistinguishabilityAdversaryView IsPolyTime HPolyTime Hreduction HreductionPrg enc prg HEncIndCpa HPrgSecure expr1 Hatomic1
+  exact symbolicToSemanticIndistinguishabilityAdversaryView IsPolyTime HPolyTime enc prg Hreduction HreductionPrg HEncIndCpa HPrgSecure expr1 Hatomic1
   -- HOP 2: adversaryView expr1 ≈ expr2
   rw [Hi2]
   apply indSym
-  exact symbolicToSemanticIndistinguishabilityAdversaryView IsPolyTime HPolyTime Hreduction HreductionPrg enc prg HEncIndCpa HPrgSecure expr2 Hatomic2
+  exact symbolicToSemanticIndistinguishabilityAdversaryView IsPolyTime HPolyTime enc prg Hreduction HreductionPrg HEncIndCpa HPrgSecure expr2 Hatomic2
 
 /--
   Soundness on the PRG-free fragment, with **no** side conditions: if every key subterm of
@@ -130,12 +126,9 @@ theorem symbolicToSemanticIndistinguishability
 theorem symbolicToSemanticIndistinguishabilityAtomic
   (IsPolyTime : PolyFamOracleCompPred)
   (HPolyTime : PolyTimeClosedUnderComposition (fun {_ _ _} => IsPolyTime))
-  (Hreduction : ∀ (enc : encryptionScheme) (prg : prgScheme) (shape : Shape) (expr : Expression shape) (key₀ : ℕ),
-    IsPolyTime (reductionHidingOneKey enc prg expr key₀))
-  (HreductionPrg : forall (enc_ : encryptionScheme) (prg_ : prgScheme) (s_ : Shape) (expr_ : Expression s_) (targetSeed_ : Expression Shape.KeyS) (idx0_ idx1_ : ℕ),
-    IsPolyTime (fun κ => reductionToPrgOracle enc_ prg_ expr_ targetSeed_ idx0_ idx1_ κ))
-  (enc : encryptionScheme)
-  (prg : prgScheme)
+  (enc : encryptionScheme) (prg : prgScheme)
+  (Hreduction : EncReductionPolyTime IsPolyTime enc prg)
+  (HreductionPrg : PrgReductionPolyTime IsPolyTime enc prg)
   (HEncIndCpa : encryptionSchemeIndCpa (fun {_ _ _} => IsPolyTime) enc)
   (HPrgSecure : prgSchemeSecure (fun {_ _ _} => IsPolyTime) prg)
   {shape : Shape} (expr1 expr2 : Expression shape)
@@ -144,7 +137,7 @@ theorem symbolicToSemanticIndistinguishabilityAtomic
   CompIndistinguishabilityDistr (fun {_ _ _} => IsPolyTime)
     (famDistrLift (exprToFamDistr enc prg expr1))
     (famDistrLift (exprToFamDistr enc prg expr2)) :=
-  symbolicToSemanticIndistinguishability IsPolyTime HPolyTime Hreduction HreductionPrg enc prg
+  symbolicToSemanticIndistinguishability IsPolyTime HPolyTime enc prg Hreduction HreductionPrg
     HEncIndCpa HPrgSecure expr1 expr2
     (fun S => hidingSideCondition_of_atomicKeys (atomicKeys_hideEncrypted S HA1))
     (fun S => hidingSideCondition_of_atomicKeys (atomicKeys_hideEncrypted S HA2))
@@ -206,13 +199,9 @@ theorem symbolicToSemanticIndistinguishabilityOfStep
 theorem symbolicToSemanticSoundness
   (IsPolyTime : PolyFamOracleCompPred)
   (HPolyTime : PolyTimeClosedUnderComposition (fun {_ _ _} => IsPolyTime))
-  (Hreduction : ∀ (enc : encryptionScheme) (prg : prgScheme) (shape : Shape)
-    (expr : Expression shape) (key₀ : ℕ), IsPolyTime (reductionHidingOneKey enc prg expr key₀))
-  (HreductionPrg : ∀ (enc_ : encryptionScheme) (prg_ : prgScheme) (s_ : Shape)
-    (expr_ : Expression s_) (targetSeed_ : Expression Shape.KeyS) (idx0_ idx1_ : ℕ),
-    IsPolyTime (fun κ => reductionToPrgOracle enc_ prg_ expr_ targetSeed_ idx0_ idx1_ κ))
-  (enc : encryptionScheme)
-  (prg : prgScheme)
+  (enc : encryptionScheme) (prg : prgScheme)
+  (Hreduction : EncReductionPolyTime IsPolyTime enc prg)
+  (HreductionPrg : PrgReductionPolyTime IsPolyTime enc prg)
   (HEncIndCpa : encryptionSchemeIndCpa (fun {_ _ _} => IsPolyTime) enc)
   (HPrgSecure : prgSchemeSecure (fun {_ _ _} => IsPolyTime) prg)
   {shape : Shape} (expr1 expr2 : Expression shape)
@@ -221,6 +210,6 @@ theorem symbolicToSemanticSoundness
     (famDistrLift (exprToFamDistr enc prg expr1))
     (famDistrLift (exprToFamDistr enc prg expr2)) :=
   symbolicToSemanticIndistinguishabilityOfStep IsPolyTime HPolyTime enc prg
-    (fixpointStepSound IsPolyTime HPolyTime Hreduction HreductionPrg enc prg
+    (fixpointStepSound IsPolyTime HPolyTime enc prg Hreduction HreductionPrg
       HEncIndCpa HPrgSecure)
     expr1 expr2 Hi

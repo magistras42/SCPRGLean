@@ -18,19 +18,16 @@ namespace PRG
 theorem garblingSecure
   (IsPolyTime : PolyFamOracleCompPred)
   (HPolyTime : PolyTimeClosedUnderComposition (fun {_ _ _} => IsPolyTime))
-  (Hreduction : ∀ (enc : encryptionScheme) (prg : prgScheme) (shape : Shape)
-    (expr : Expression shape) (key₀ : ℕ), IsPolyTime (reductionHidingOneKey enc prg expr key₀))
-  (HreductionPrg : ∀ (enc_ : encryptionScheme) (prg_ : prgScheme) (s_ : Shape)
-    (expr_ : Expression s_) (targetSeed_ : Expression Shape.KeyS) (idx0_ idx1_ : ℕ),
-    IsPolyTime (fun κ => reductionToPrgOracle enc_ prg_ expr_ targetSeed_ idx0_ idx1_ κ))
   (enc : encryptionScheme) (prg : prgScheme)
+  (Hreduction : EncReductionPolyTime IsPolyTime enc prg)
+  (HreductionPrg : PrgReductionPolyTime IsPolyTime enc prg)
   (HEncIndCpa : encryptionSchemeIndCpa (fun {_ _ _} => IsPolyTime) enc)
   (HPrgSecure : prgSchemeSecure (fun {_ _ _} => IsPolyTime) prg)
   {s t : WireBundle} (c : Circuit s t) (x : bundleBool s) :
   CompIndistinguishabilityDistr (fun {_ _ _} => IsPolyTime)
     (famDistrLift (exprToFamDistr enc prg (Garble c x)))
     (famDistrLift (exprToFamDistr enc prg (Simulate c (evalCircuit c x)))) :=
-  symbolicToSemanticSoundness IsPolyTime HPolyTime Hreduction HreductionPrg enc prg
+  symbolicToSemanticSoundness IsPolyTime HPolyTime enc prg Hreduction HreductionPrg
     HEncIndCpa HPrgSecure _ _ (theorem5 c x)
 
 end PRG

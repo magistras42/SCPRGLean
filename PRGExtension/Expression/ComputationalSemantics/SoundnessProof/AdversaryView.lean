@@ -132,10 +132,9 @@ lemma hidingSideCondition_of_atomicKeys {s : Shape} {e : Expression s} (h : Atom
 def symbolicToSemanticIndistinguishabilityHidingInnerMotive (z : Finset (Expression Shape.KeyS)) : Prop :=
   forall
    (IsPolyTime : PolyFamOracleCompPred) (_HPolyTime : PolyTimeClosedUnderComposition IsPolyTime)
-  (_Hreduction : forall enc prg shape (expr : Expression shape) (key₀ : ℕ), IsPolyTime (reductionHidingOneKey enc prg expr key₀))
-  (_HreductionPrg : forall (enc_ : encryptionScheme) (prg_ : prgScheme) (s_ : Shape) (expr_ : Expression s_) (targetSeed_ : Expression Shape.KeyS) (idx0_ idx1_ : ℕ),
-    IsPolyTime (fun κ => reductionToPrgOracle enc_ prg_ expr_ targetSeed_ idx0_ idx1_ κ))
   (enc : encryptionScheme) (prg : prgScheme)
+  (_Hreduction : EncReductionPolyTime IsPolyTime enc prg)
+  (_HreductionPrg : PrgReductionPolyTime IsPolyTime enc prg)
   (_HEncIndCpa : encryptionSchemeIndCpa IsPolyTime enc)
   (_HPrgSecure : prgSchemeSecure IsPolyTime prg)
   {shape : Shape} (expr : Expression shape)
@@ -162,13 +161,13 @@ theorem symbolicToSemanticIndistinguishabilityHidingInner  (z : Finset (Expressi
 by
   induction z using Finset.induction_on'
   case empty =>
-    intro IsPolyTime HPolyTime Hreduction HreductionPrg enc prg HEncIndCpa HPrgSecure shape expr Hexpr _Hatomic _Hseed Hempty
+    intro IsPolyTime HPolyTime enc prg Hreduction HreductionPrg HEncIndCpa HPrgSecure shape expr Hexpr _Hatomic _Hseed Hempty
     conv =>
       arg 2
       simp [emptyHide]
     apply indRfl
   case insert key keySet Hkey Hkey2 HkeyFresh Hind  =>
-    intro IsPolyTime HPolyTime Hreduction HreductionPrg enc prg HEncIndCpa HPrgSecure shape expr Hexpr Hatomic Hseed
+    intro IsPolyTime HPolyTime enc prg Hreduction HreductionPrg HEncIndCpa HPrgSecure shape expr Hexpr Hatomic Hseed
     -- the key removed at this step is atomic ...
     have Hkatomic : ∃ n : ℕ, key = Expression.VarK n :=
       Hatomic key (Finset.mem_insert_self key keySet)
@@ -210,7 +209,7 @@ by
           tauto
       rw [Heq]
       apply indSym
-      refine Hind IsPolyTime HPolyTime Hreduction HreductionPrg enc prg HEncIndCpa HPrgSecure
+      refine Hind IsPolyTime HPolyTime enc prg Hreduction HreductionPrg HEncIndCpa HPrgSecure
         _ ?_ HatomicSub (HseedSub _)
       · simp [removeOneKeyProper] at *
         rw [<-Heq, Finset.inter_comm]
@@ -226,7 +225,7 @@ by
       cases key
       case VarK key₀ =>
           simp [removeOneKeyProper, removeOneKey]
-          exact symbolicToSemanticIndistinguishabilityHidingOneKey IsPolyTime HPolyTime Hreduction enc HEncIndCpa expr key₀ Hnot
+          exact symbolicToSemanticIndistinguishabilityHidingOneKey IsPolyTime HPolyTime enc prg Hreduction HEncIndCpa expr key₀ Hnot
             (Hseed key₀ (Finset.mem_insert_self _ _))
       case G0 ek =>
         obtain ⟨n, hn⟩ := Hkatomic
@@ -237,10 +236,9 @@ by
 
 theorem symbolicToSemanticIndistinguishabilityHiding
   (IsPolyTime : PolyFamOracleCompPred) (HPolyTime : PolyTimeClosedUnderComposition IsPolyTime)
-  (Hreduction : forall enc prg shape (expr : Expression shape) key₀, IsPolyTime (reductionHidingOneKey enc prg expr key₀))
-  (HreductionPrg : forall (enc_ : encryptionScheme) (prg_ : prgScheme) (s_ : Shape) (expr_ : Expression s_) (targetSeed_ : Expression Shape.KeyS) (idx0_ idx1_ : ℕ),
-    IsPolyTime (fun κ => reductionToPrgOracle enc_ prg_ expr_ targetSeed_ idx0_ idx1_ κ))
   (enc : encryptionScheme) (prg : prgScheme)
+  (Hreduction : EncReductionPolyTime IsPolyTime enc prg)
+  (HreductionPrg : PrgReductionPolyTime IsPolyTime enc prg)
   (HEncIndCpa : encryptionSchemeIndCpa IsPolyTime enc)
   (HPrgSecure : prgSchemeSecure IsPolyTime prg)
   {shape : Shape} (expr : Expression shape)
@@ -251,7 +249,7 @@ by
   rw [← hideKeysUniv]
   rw [← Finset.coe_sdiff]
   -- allParts \ extractKeys is guaranteed to be a finite set due to our fixed point calculations earlier
-  apply symbolicToSemanticIndistinguishabilityHidingInner (allParts expr \ extractKeys expr) IsPolyTime HPolyTime Hreduction HreductionPrg enc prg HEncIndCpa HPrgSecure
+  apply symbolicToSemanticIndistinguishabilityHidingInner (allParts expr \ extractKeys expr) IsPolyTime HPolyTime enc prg Hreduction HreductionPrg HEncIndCpa HPrgSecure
   -- extractKeys expr ∩ (allParts expr \ extractKeys expr) = ∅
   · apply Finset.eq_empty_of_forall_not_mem
     intro x
@@ -282,11 +280,9 @@ def exprCompInd (IsPolyTime : PolyFamOracleCompPred) (enc : encryptionScheme) (p
 theorem symbolicToSemanticIndistinguishabilityAdversaryView
   (IsPolyTime : PolyFamOracleCompPred)
   (HPolyTime : PolyTimeClosedUnderComposition (fun {_ _ _} => IsPolyTime))
-  (Hreduction : forall enc prg shape (expr : Expression shape) key₀, IsPolyTime (reductionHidingOneKey enc prg expr key₀))
-  (HreductionPrg : forall (enc_ : encryptionScheme) (prg_ : prgScheme) (s_ : Shape) (expr_ : Expression s_) (targetSeed_ : Expression Shape.KeyS) (idx0_ idx1_ : ℕ),
-    IsPolyTime (fun κ => reductionToPrgOracle enc_ prg_ expr_ targetSeed_ idx0_ idx1_ κ))
-  (enc : encryptionScheme)
-  (prg : prgScheme)
+  (enc : encryptionScheme) (prg : prgScheme)
+  (Hreduction : EncReductionPolyTime IsPolyTime enc prg)
+  (HreductionPrg : PrgReductionPolyTime IsPolyTime enc prg)
   (HEncIndCpa : encryptionSchemeIndCpa (fun {_ _ _} => IsPolyTime) enc)
   (HPrgSecure : prgSchemeSecure (fun {_ _ _} => IsPolyTime) prg)
   {shape : Shape}
@@ -362,7 +358,7 @@ theorem symbolicToSemanticIndistinguishabilityAdversaryView
 
       have Zstep := symbolicToSemanticIndistinguishabilityHidingInner
         ((z \ keyRecovery expr z) ∩ allParts (hideEncrypted z expr))
-        IsPolyTime HPolyTime Hreduction HreductionPrg enc prg HEncIndCpa HPrgSecure
+        IsPolyTime HPolyTime enc prg Hreduction HreductionPrg HEncIndCpa HPrgSecure
         (hideEncrypted z expr) Hdisj
         (fun k hk => (Hatomic z).1 k (by
           rw [Finset.mem_sdiff]
@@ -405,7 +401,7 @@ theorem symbolicToSemanticIndistinguishabilityAdversaryView
 --     (by
 --       intro z Hz
 --       simp [R, exprCompInd]
---       have Z := symbolicToSemanticIndistinguishabilityHiding IsPolyTime HPolyTime Hreduction enc HEncIndCpa (hideEncrypted z expr)
+--       have Z := symbolicToSemanticIndistinguishabilityHiding IsPolyTime HPolyTime enc prg Hreduction HEncIndCpa (hideEncrypted z expr)
 --       simp [expressionRecovery] at Z
 --       rw [iterationOrFresh] at Z
 --       apply Z
@@ -414,7 +410,7 @@ theorem symbolicToSemanticIndistinguishabilityAdversaryView
 --     (by
 --       intro z
 --       simp [R, exprCompInd]
---       have Z := symbolicToSemanticIndistinguishabilityHiding IsPolyTime HPolyTime Hreduction enc HEncIndCpa expr
+--       have Z := symbolicToSemanticIndistinguishabilityHiding IsPolyTime HPolyTime enc prg Hreduction HEncIndCpa expr
 --       simp [expressionRecovery] at Z
 --       apply Z
 --       )
