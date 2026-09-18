@@ -16,17 +16,19 @@ stop being atomic variables and become `G`-chains `G^w(K_n)`.
 ## 1. Headline result
 
 ```
-garblingSecure                                    -- Garbling/Security.lean
+garblingSecureFromEfficiency                      -- Garbling/Security.lean  (entry point)
  ├─ theorem5                                      -- LM18 Thm 5  (symbolic)
- └─ symbolicToSemanticSoundness                   -- LM18 Thm 1  (no side conditions)
-     └─ fixpointStepSound                         -- LM18 Lemma 3, general case
+ └─ symbolicToSemanticSoundnessFromEfficiency     -- LM18 Thm 1  (no side conditions)
+     ├─ fixpointStepSound                         -- LM18 Lemma 3, general case
+     └─ reductionToPrgOracle_polyTime             -- PRG reduction's efficiency, derived
 ```
 
-`garblingSecure` says: for every circuit `C` and input `x`, the distributions of
-`Garble(C, x)` and `Simulate(C, C(x))` are computationally indistinguishable, assuming
-IND-CPA security of the encryption scheme and security of the PRG.
+It says: for every circuit `C` and input `x`, the distributions of `Garble(C, x)` and
+`Simulate(C, C(x))` are computationally indistinguishable, assuming IND-CPA security of the
+encryption scheme, security of the PRG, and efficiency of the IND-CPA reduction (§6).
 
-Proved along the way: LM18 **Lemmas 2, 4, 5, 6, 7, 8** and **Theorems 1, 4, 5**.
+Proved along the way: LM18 **Lemmas 2, 3, 4, 5, 6, 7, 8** and **Theorems 1, 4, 5**, plus
+[Mic09, Lemma 2] in both directions and the characterisation of the bounded PRG closure.
 
 ---
 
@@ -182,15 +184,27 @@ Removed — it asserted exactly what the PRG game hop is supposed to *prove*. It
 now `symbolicToSemanticIndistinguishabilityPrgIdealization`, proved from `prgSchemeSecure`
 via `reductionToPrgOracle`.
 
-### 4.7 Bounded vs. unbounded PRG closure — a deliberate divergence, documented
+### 4.7 Bounded vs. unbounded PRG closure — a forced divergence, now characterised
+
+**STATUS: PROVED.** `Expression/Lemmas/GStar.lean`.
 
 `prgClosure U S` is bounded by `U = keySubterms p`, so it is **not** LM18's unbounded `𝖦*`.
-This is forced: `greatestFixpoint` is a terminating recursion on `Finset.card`, so
-`keyRecovery` must return a `Finset`, and `𝖦*({k})` is infinite. Because `keySubterms` is
-subterm-closed, `prgClosure U base = 𝖦*(base) ∩ U` exactly, and `hideEncrypted` only ever
-tests keys that occur — so the computed *pattern* agrees with LM18's. The divergence is only
-in membership queries for keys that do not occur, which is why `LabelInvariant` had to be
-relativised to `LabelInvariantIn U S` (`scratch/DupTrailing.lean` exhibits the case).
+This is forced rather than chosen: `greatestFixpoint` is a constructive recursion on
+`Finset.card`, so `keyRecovery` must return a `Finset`, and `𝖦*({k})` is infinite.
+Computability and `#eval` are consequences, not the motivation.
+
+Two theorems say exactly what the bound costs. `prgClosure_eq_gStar_inter`: for a
+chain-closed bound, `prgClosure U base = 𝖦*(base) ∩ U` **exactly** — `keySubterms p` is
+chain-closed (`keySubterms_closed`). And `adversaryView_eq_gStar`: hiding with the bounded
+closure yields *the same expression* as hiding with the unbounded `𝖦*`, so the computed
+pattern — all that `symIndistinguishable` compares — is the paper's.
+
+What genuinely differs is membership for keys that do **not** occur in the expression.
+`scratch/DupTrailing.lean` exhibits it: `Garble Dup true` has `keySubterms = {K₁}` while its
+output labels are `(b, G0 K₀, G0 K₁)` and `(b, G1 K₀, G1 K₁)`, so LM18 recovers one key of
+each pair and the bounded closure recovers neither. That is why `LabelInvariant S` was
+relativised to `LabelInvariantIn U S`; with `adversaryView_eq_gStar` the relativisation is
+justified rather than merely explained, since a key occurring nowhere affects no pattern.
 
 ---
 
@@ -289,57 +303,72 @@ with a pseudorandom key renaming; that argument is now formalised.
 
 ## 6. What is *assumed*, not proved
 
-The honest boundary of `garblingSecure`:
+`garblingSecure` / `garblingSecureFromEfficiency` rest on **two** assumptions, both on the
+computational side.
 
-1. `encryptionSchemeIndCpa` and `prgSchemeSecure` — the standard cryptographic assumptions.
-2. `EncReductionPolyTime IsPolyTime enc prg` — that the **IND-CPA** reduction, for the
-   scheme at hand, runs in polynomial time.  (Use `garblingSecureFromEfficiency` /
-   `symbolicToSemanticSoundnessFromEfficiency` as the entry points: they take the efficiency
-   claims and derive `PrgReductionPolyTime` internally.  `garblingSecure` is retained for
-   callers who prefer to assume it.)  Assumed; the informal cost argument (including
-   the `G0`/`G1` cases) is at the end of `HidingOneKey.lean`.  It cannot currently be proved:
-   `reductionToOracle` recurses over the expression making oracle queries, so the structural
-   decomposition would need closure under sequencing *two oracle computations*, and
-   `PolyFamOracleCompPred` provides no such primitive — there is no cost semantics for
-   `OracleComp` here or in the oracle-computation library.
-   * `PrgReductionPolyTime` is **not** assumed — it is derived
-     (`reductionToPrgOracle_polyTime`) from `EfficientEvalPrg` plus the framework's own
-     composition closure, because the PRG reduction is exactly "sample an environment, query
-     once, evaluate" (`reductionToPrgOracle_decompose`).
-   * `EfficientPrg` / `EfficientEnc` / `EfficientEvalPrg` state LM18 Definition 1's
-     efficiency requirement, which the inherited model omitted entirely — `prgFunctions` was
-     an arbitrary pair of functions with no tie to `IsPolyTime`.
-   * `EvalEfficiencyFromPrimitives` names the single remaining step:
-     `EfficientEnc ∧ EfficientPrg → EfficientEvalPrg`.  It is not provable here because
-     `evalExpr`'s recursion has no cost semantics — the same gap that keeps
-     `EncReductionPolyTime` assumed.  Given it,
-     `reductionToPrgOracle_polyTime_of_primitives` yields `PrgReductionPolyTime` from LM18
-     Definition 1 alone.
-   * Both hypotheses used to be quantified over **all** schemes, which is false in any
-     concrete cost model (an inefficient scheme has an inefficient reduction) and would have
-     made every downstream theorem vacuous on instantiation.  They are now fixed to the
-     ambient `enc`/`prg`.  See `ComputationalSemantics/PolyTime.lean`.
-3. ~~[Mic09, Lemma 2]~~ — **no longer an assumption.**  Both directions are proved in
-   `Expression/Lemmas/PseudorandomRenaming.lean`: the factorisation
-   (`gPreserving_eq_substKeys`, `gPreserving_ext`, `rootsOf_keySubterms`) and the generation
-   direction in full (`prgRenameRel_substKeys_general` — every injective renaming of the
-   roots with pairwise independent images is reachable from LM18's two generators, with no
-   freshness hypothesis).  So the generators are exhaustive and `PrgRenameRel` loses nothing
-   by taking them as its definition.
-4. ~~The bounded-vs-unbounded closure divergence~~ — **no longer taken on trust.**
-   `Expression/Lemmas/GStar.lean` proves `prgClosure U base = 𝖦*(base) ∩ U` exactly for a
-   chain-closed bound (`prgClosure_eq_gStar_inter`), and that hiding with the bounded closure
-   yields the *same expression* as hiding with the unbounded `𝖦*`
-   (`adversaryView_eq_gStar`) — so the pattern is the paper's.  The bound itself is forced:
-   `greatestFixpoint` is a constructive recursion on `Finset.card`, so `keyRecovery` must
-   return a `Finset` and `𝖦*({k})` is infinite.  What genuinely differs is membership for
-   keys that do not occur in the expression, which affects no pattern and is exactly what
-   `LabelInvariantIn`'s guard accounts for.
+### 6.1 Hardness of the primitives
 
-So on the symbolic side **nothing is assumed**.  The two remaining genuine assumptions
-(items 1 and 2) are the cryptographic hardness of the primitives and the efficiency of the
-IND-CPA reduction — both on the computational side, and both waiting on a cost semantics for
-`OracleComp`.
+`encryptionSchemeIndCpa enc` and `prgSchemeSecure prg`. These are the point of the exercise,
+not a gap.
+
+### 6.2 Efficiency of the IND-CPA reduction
+
+`EncReductionPolyTime IsPolyTime enc prg` — that `reductionHidingOneKey`, for the scheme at
+hand, runs in polynomial time. The informal cost argument, including the `G0`/`G1` cases, is
+at the end of `HidingOneKey.lean`.
+
+It cannot currently be *proved*: `reductionToOracle` recurses over the expression while
+making oracle queries, so the structural decomposition would need closure under sequencing
+**two oracle computations**, and `PolyFamOracleCompPred` provides no such primitive — there
+is no cost semantics for `OracleComp` in this repo or in the oracle-computation library.
+The same gap leaves `EvalEfficiencyFromPrimitives` (`EfficientEnc ∧ EfficientPrg →
+EfficientEvalPrg`) assumed; `evalExpr`'s recursion has no cost semantics either.
+
+What is *not* assumed, and worth noting because the inherited code assumed all of it:
+
+* `PrgReductionPolyTime` is **derived** (`reductionToPrgOracle_polyTime`), because the PRG
+  reduction is exactly "sample an environment, query once, evaluate"
+  (`reductionToPrgOracle_decompose`), so the framework's own composition closure applies.
+  Use `garblingSecureFromEfficiency` as the entry point; `garblingSecure` is retained for
+  callers who prefer to assume it directly.
+* `EfficientPrg` / `EfficientEnc` state LM18 Definition 1's efficiency requirement, which
+  the inherited model omitted entirely — `prgFunctions` was an arbitrary pair of functions
+  with no tie to `IsPolyTime`. Given `EvalEfficiencyFromPrimitives`,
+  `reductionToPrgOracle_polyTime_of_primitives` yields `PrgReductionPolyTime` from LM18
+  Definition 1 alone.
+* Both efficiency hypotheses were originally quantified over **all** schemes, which is false
+  in any concrete cost model (an inefficient scheme has an inefficient reduction) and would
+  have made every downstream theorem vacuous on instantiation. They are now fixed to the
+  ambient `enc`/`prg`. See `ComputationalSemantics/PolyTime.lean`.
+
+### 6.3 Definitional deviations from the paper (disclosure, not assumptions)
+
+These do not weaken the theorem; they mean it is about a very slightly different model.
+
+* `Hidden k` evaluates to `enc.encrypt key ones` (all-ones) where LM18 writes
+  `𝖤(σ(k), 0^{|s|})`. A fixed public constant either way. The length is pinned by
+  unification rather than an explicit `shapeLength` argument, which makes some goals harder
+  to read.
+* `normalizeExpr` does not recurse into `Enc`'s key or into `Hidden`. Harmless because
+  `Expression 𝕂` has only the constructors `VarK`, `G0`, `G1` — no `Enc`, no `Hidden`, no
+  `BitE` — which is also what makes `hideEncrypted_key`, `encKeys_key`, `extractKeys_key`
+  and `exprKeys_key` true. It would break silently if the language gained a key former
+  mentioning bits or encryptions.
+
+### 6.4 Previously assumed, now proved
+
+Recorded because earlier drafts of this report listed them as assumptions.
+
+* **[Mic09, Lemma 2]** — `Expression/Lemmas/PseudorandomRenaming.lean`. Both directions: the
+  factorisation (`gPreserving_eq_substKeys`, `gPreserving_ext`, `rootsOf_keySubterms`) and
+  the generation direction in full (`prgRenameRel_substKeys_general` — every injective
+  renaming of the roots with pairwise independent images is reachable from LM18's two
+  generators, with no freshness hypothesis). So the generators are exhaustive and
+  `PrgRenameRel` loses nothing by taking them as its definition.
+* **The bounded PRG closure** — `Expression/Lemmas/GStar.lean`; see §4.7.
+
+No symbolic-side *assumptions* remain. Both live assumptions are computational, and both
+wait on the same missing ingredient: a cost semantics for `OracleComp`.
 
 ## 7. Verification
 
@@ -349,12 +378,15 @@ grep -r "sorry\|^axiom" PRGExtension        # no occurrences outside comments
 ```
 
 ```
-#print axioms PRG.garblingSecure            → [propext, Classical.choice, Quot.sound]
-#print axioms symbolicToSemanticSoundness   → [propext, Classical.choice, Quot.sound]
-#print axioms PRG.fixpointStepSound         → [propext, Classical.choice, Quot.sound]
-#print axioms PRG.theorem5                  → [propext, Classical.choice, Quot.sound]
-#print axioms PRG.lemma7 / PRG.lemma8       → [propext, Classical.choice, Quot.sound]
-#print axioms PRG.garbleCorrect             → [propext, Quot.sound]
+#print axioms PRG.garblingSecureFromEfficiency   → [propext, Classical.choice, Quot.sound]
+#print axioms PRG.garblingSecure                 → [propext, Classical.choice, Quot.sound]
+#print axioms symbolicToSemanticSoundness        → [propext, Classical.choice, Quot.sound]
+#print axioms PRG.fixpointStepSound              → [propext, Classical.choice, Quot.sound]
+#print axioms PRG.theorem5                       → [propext, Classical.choice, Quot.sound]
+#print axioms PRG.lemma7 / PRG.lemma8            → [propext, Classical.choice, Quot.sound]
+#print axioms PRG.prgRenameRel_substKeys_general → [propext, Classical.choice, Quot.sound]
+#print axioms PRG.adversaryView_eq_gStar         → [propext, Classical.choice, Quot.sound]
+#print axioms PRG.garbleCorrect                  → [propext, Quot.sound]
 ```
 
 Executable sanity checks live in `scratch/` (not part of the library; run with
