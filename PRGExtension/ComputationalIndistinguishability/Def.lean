@@ -2,6 +2,32 @@ import VCVio2.VCVio.OracleComp.OracleSpec
 import VCVio2.VCVio.OracleComp.OracleComp
 import VCVio2.VCVio.OracleComp.SimSemantics.SimulateQ
 
+/-!
+# Computational indistinguishability, and the abstract adversary class
+
+The framework layer, independent of the expression algebra.  Defines what it means for two
+κ-indexed families of distributions — or two seeded oracles — to be computationally
+indistinguishable, relative to an *abstract* notion of feasible adversary.
+
+* `negl` — negligible functions, in a bounded form (`∀ k, ∃ B, ∀ i, f i * i ^ k ≤ B`) chosen
+  to avoid a quantifier alternation; the comment below argues its equivalence with the
+  textbook definition.
+* `famDistr`, `famComp`, `famOracleComp`, `famSeededOracle` — the κ-indexed vocabulary.
+* `PolyFamOracleCompPred` — the adversary class, as an opaque predicate on families of oracle
+  computations.  Everything downstream is parametric in it.
+* `CompIndistinguishabilityDistr`, `CompIndistinguishabilitySeededOracle` — the two
+  indistinguishability notions, for distribution families and for seeded oracles.
+* `PolyTimeClosedUnderComposition` — the one structural property the original development
+  assumed of the class: closure under oracle-computation-then-pure-computation.
+
+One encoding here shapes everything downstream.  `polyTimeFamComp` expresses "this *value*
+function is feasible" as "the oracle computation that **queries for its input** and then runs
+it is feasible".  That encoding is not invertible, so a concrete model cannot recover the
+value function from it; that is why `ComputationalSemantics/CostModel.lean` carries its own
+value-level predicate, and why `PolyTimeClosedUnderComposition` resists being discharged.
+See `CHECKPOINT.md` §3.1, findings F6 and F7.
+-/
+
 -- In this file, we want to define a notion of computational indistinguishability,
 -- for families of of distributions parameterized by the security parameter (κ : ℕ).
 

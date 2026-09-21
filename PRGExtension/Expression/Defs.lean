@@ -1,3 +1,21 @@
+/-!
+# The symbolic expression algebra
+
+The syntax that everything else in the development is about.  An `Expression s` is a symbolic
+term whose `Shape s` determines the shape of the bit string it will eventually denote.
+
+* `Shape` — `𝔹` (a bit), `𝕂` (a key), pairs, encryptions, and empty.
+* `BitExpr` — bit variables, constants, negation.
+* `Expression` — bit expressions, key variables, pairs, the PRG formers `G0`/`G1`, the
+  controlled swap `Perm`, encryption `Enc`, the hole `Hidden`, and `Eps`.
+
+Two things to know before working with this type.  `Expression 𝕂` has **only** the
+constructors `VarK`, `G0`, `G1` — no `Enc`, no `Hidden`, no `BitE` — an invariant many
+downstream lemmas rely on.  And because `Expression` is an *indexed* family, `rfl` frequently
+fails where you would expect it to succeed and `induction` misbehaves on a fixed index; use
+structural recursion with explicit match arms.  See `CHECKPOINT.md` §5.
+-/
+
 namespace PRG
 
 -- need to see if need to add a shape for PRGs

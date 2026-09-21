@@ -8,6 +8,26 @@ import Mathlib.Data.Finset.Union
 import PRGExtension.Expression.Defs
 import PRGExtension.Core.Fixpoints
 
+/-!
+# Symbolic indistinguishability
+
+The symbolic half of the development: a purely syntactic relation on expressions that is
+*sound* for computational indistinguishability (`ComputationalSemantics/Soundness.lean`) and
+that LM18 Theorem 5 establishes for garbled circuits (`Garbling/SymbolicHiding/`).
+
+* `normalizeB` / `normalizeExpr` — negations pushed to the leaves.  Part of the *definition* of
+  the relation, so under-normalising would make the relation too **strong**: soundness would
+  survive but Theorem 5 could fail.
+* `applyKeyRenamingP`, `applyBitRenaming`, `applyVarRenaming` — the renaming action, and the
+  validity predicates that go with it.
+* `keySubterms`, `isDerived`, `prgStep` — what an adversary can derive from what it holds; the
+  greatest fixpoint of `prgStep` is the recoverable-key closure.
+
+**This file declares `notation p1 "⊆" p2 => ExpressionInclusion p1 p2`, which shadows `Finset`
+subset here and in everything importing it.**  Symptom: `ExpressionInclusion` type mismatches
+on a goal you wrote as a set inclusion.  See `CHECKPOINT.md` §5.
+-/
+
 -- The definition of symbolic indistinguishability consists of 3 parts
 -- (i) Normalization, i.e. performing simple computations on the expressions
 -- (ii) Variable renaming -- both key and bit variables.

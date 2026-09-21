@@ -9,6 +9,20 @@ import Mathlib.Probability.Distributions.Uniform
 
 import Mathlib.Data.ENNReal.Inv
 
+/-!
+# Variable renamings preserve the computational semantics
+
+A bijective renaming of key or bit variables permutes the uniformly sampled environment, so it
+cannot change the induced distribution.  This is the computational half of why symbolic
+indistinguishability is allowed to quotient by renaming.
+
+The work is a counting argument rather than a measure-theoretic one:
+`extendRenameRestrictKUniform` and `extendRenameRestrictBUniform` show that sampling a uniform
+environment and then renaming gives back a uniform environment, via
+`Core/CardinalityLemmas.lean`.  The bit case is the fiddlier of the two, because a
+`BitRenaming` may negate as well as permute.
+-/
+
 namespace PRG
 
 def applyKeyRenamingToKVars (f : KeyRenaming) (kVars : (ℕ -> BitVector κ)) : (ℕ -> BitVector κ) :=

@@ -3,6 +3,18 @@ import PRGExtension.Expression.SymbolicIndistinguishability
 import PRGExtension.Expression.ComputationalSemantics.Def
 import PRGExtension.Expression.Lemmas.NormalizeIdempotent
 
+/-!
+# Normalisation preserves the computational semantics
+
+`normalizeExpr` pushes negations down to the leaves of bit expressions, and it appears in the
+*definition* of symbolic indistinguishability.  For that definition to be sound, normalising
+must not change what an expression means computationally.
+
+`normalizeEvalExpr` is the statement for a fixed environment and `normalizeExprToDistr` for
+the sampled one.  `getMaxVarNormalize` records that normalisation introduces no new variables,
+which is what lets both sides share a sampling width.
+-/
+
 
 open PRG
 

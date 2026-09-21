@@ -4,6 +4,10 @@ import Mathlib.Probability.ProbabilityMassFunction.Basic
 import Mathlib.Probability.ProbabilityMassFunction.Monad
 import Mathlib.Probability.Distributions.Uniform
 import Mathlib.Data.Vector.Defs
+import Mathlib.Algebra.Polynomial.Eval.Defs
+import Mathlib.Data.Fintype.Vector
+import Mathlib.Data.Fintype.BigOperators
+import Mathlib.SetTheory.Cardinal.Finite
 
 import Mathlib.Data.Fintype.Card
 import Mathlib.Data.Fintype.Defs
@@ -14,6 +18,29 @@ import Mathlib.Data.Finset.Basic
 import Mathlib.Data.Finset.Defs
 
 import PRGExtension.Core.CardinalityLemmas
+
+/-!
+# Computational semantics of expressions
+
+Where the symbolic algebra meets actual bit strings.  An `Expression` is interpreted as a
+distribution over bit vectors, given an encryption scheme, a PRG, and an environment
+assigning values to the key and bit variables.
+
+* `encryptionFunctions` / `encryptionScheme`, `prgFunctions` / `prgScheme` — the primitives.
+  Note that `encryptionFunctions` relates `encrypt` and `decrypt` by **nothing**: there is no
+  correctness field, so a scheme whose ciphertext ignores the message is legal.  That is not
+  hypothetical — `scratch/DegenerateEnc.lean` uses one to show that IND-CPA alone places no
+  constraint on the adversary class.
+* `shapeLength` — the length of the bit vector a shape produces.
+* `PolyLength`, `LengthPoly`, `shapeLength_poly` — LM18 Definition 1's *length* half.  Without
+  `LengthPoly`, `encryptLength n = 2 ^ n` is a legal scheme, the value of a nested `Enc` is
+  exponentially long in the expression depth, and every cost argument downstream fails.
+* `PolySized` — poly-sized type families, carrying the width as **data** so that a cost model's
+  obligations are arithmetic in the widths.  The side condition every clause about moving data
+  has to carry.
+* `evalExpr` — the semantics itself.  `exprToDistr` / `exprToFamDistr` close it over a
+  uniformly sampled environment.
+-/
 
 namespace PRG
 
@@ -29,6 +56,13 @@ structure encryptionFunctions (κ : ℕ) where
   encryptLength : ℕ -> ℕ
   encrypt : {n : ℕ} -> (key : BitVector κ) -> (msg : BitVector n) -> PMF (BitVector (encryptLength n))
   decrypt : {n : ℕ} -> (key : BitVector κ) -> (msg : BitVector (encryptLength n)) -> BitVector n
+  /-- **Decryption inverts encryption** (`CHECKPOINT.md` §3.2, F9).  Without this the two
+  fields are unrelated, and then: a scheme whose ciphertext ignores the message is legal (so
+  IND-CPA constrains nothing — `scratch/DegenerateEnc.lean`), and no *computational*
+  correctness statement is reachable, because the symbolic evaluator's `decrypt` has no
+  computational counterpart to agree with. -/
+  decrypt_encrypt : ∀ {n : ℕ} (key : BitVector κ) (msg : BitVector n),
+    ∀ c ∈ (encrypt key msg).support, decrypt key c = msg
 
 def encryptionScheme : Type := (κ : ℕ) -> encryptionFunctions κ
 
@@ -46,6 +80,165 @@ def shapeLength (κ : ℕ) (scheme : encryptionFunctions κ) (s : Shape) : ℕ :
   | Shape.EmptyS => 0
   | Shape.PairS s₁ s₂ => (shapeLength κ scheme s₁) + (shapeLength κ scheme s₂)
   | Shape.EncS s => scheme.encryptLength (shapeLength κ scheme s)
+
+/-!
+### Ciphertext growth: the length half of LM18 Definition 1
+
+`encryptionFunctions.encryptLength` above is an arbitrary `ℕ → ℕ`, and nothing in the types
+rules out `encryptLength n = 2 ^ n`.  For such a scheme the ciphertext of a nested `Enc` is
+*exponential* in the expression depth, so `shapeLength` is not polynomially bounded in `κ`
+and no cost analysis of the reductions can succeed — the pen-and-paper argument at the end
+of `SoundnessProof/HidingOneKey.lean` silently assumes this away when it says "since
+`encrypt (k, n)` runs in time `p (n + κ)`, its output length is also bounded by `p (n + κ)`".
+
+LM18 Definition 1 rules it out implicitly, by demanding polynomial-*time* encryption.
+`LengthPoly` states the length consequence explicitly, and `shapeLength_poly` is the form
+every later cost argument actually consumes.
+
+`prgFunctions` needs no analogue: `prg0`/`prg1` have type `BitVector κ → BitVector κ`, so
+their output lengths are pinned by the type.
+-/
+
+/-- A length family that is polynomially bounded in the security parameter.  This is the
+side condition every cost clause about bit vectors carries: an operation on bit vectors is
+only cheap if the vectors are not themselves huge. -/
+def PolyLength (d : ℕ → ℕ) : Prop := ∃ p : Polynomial ℕ, ∀ κ, d κ ≤ p.eval κ
+
+lemma PolyLength.const (n : ℕ) : PolyLength (fun _ => n) :=
+  ⟨Polynomial.C n, fun _ => by simp⟩
+
+lemma PolyLength.id : PolyLength (fun κ => κ) := ⟨Polynomial.X, fun _ => by simp⟩
+
+lemma PolyLength.add {d₁ d₂ : ℕ → ℕ} (h₁ : PolyLength d₁) (h₂ : PolyLength d₂) :
+    PolyLength (fun κ => d₁ κ + d₂ κ) := by
+  obtain ⟨p₁, hp₁⟩ := h₁
+  obtain ⟨p₂, hp₂⟩ := h₂
+  exact ⟨p₁ + p₂, fun κ => by simpa using Nat.add_le_add (hp₁ κ) (hp₂ κ)⟩
+
+/-!
+### Poly-sized type families
+
+A cost model that charges for anything at all has to bound the width of the values it moves
+around: a family of poly-size circuits has I/O width bounded by its size, so a type family
+whose values need `2 ^ κ` bits to write down cannot be the domain or codomain of one.
+
+`PolySized` records that bound, and records it **as data** — the width itself, not an
+existential.  That is deliberate.  Every primitive's cost will be a function of exactly this
+width, so when a concrete cost semantics arrives (`CHECKPOINT.md` §3.1) each closure clause's
+proof obligation is arithmetic in `width` rather than a re-derivation of the statement.  It
+is the `calf`-style "carry the bound" formulation, in the only form statable before `cost`
+exists.
+-/
+
+/-- Evidence that a type family's values fit in polynomially many bits. -/
+structure PolySized (D : ℕ → Type) where
+  /-- The number of bits needed to write down a `D κ`. -/
+  width : ℕ → ℕ
+  widthPoly : PolyLength width
+  finite : ∀ κ, Finite (D κ)
+  card_le : ∀ κ, Nat.card (D κ) ≤ 2 ^ width κ
+
+namespace PolySized
+
+/-- Bit vectors of polynomially bounded length. -/
+def bitVector (d : ℕ → ℕ) (h : PolyLength d) : PolySized (fun κ => BitVector (d κ)) where
+  width := d
+  widthPoly := h
+  finite _ := inferInstance
+  card_le κ := by simp [Nat.card_eq_fintype_card, card_vector]
+
+def bool : PolySized (fun _ => Bool) where
+  width _ := 1
+  widthPoly := PolyLength.const 1
+  finite _ := inferInstance
+  card_le κ := by simp [Nat.card_eq_fintype_card]
+
+def unit : PolySized (fun _ => Unit) where
+  width _ := 0
+  widthPoly := PolyLength.const 0
+  finite _ := inferInstance
+  card_le κ := by simp [Nat.card_eq_fintype_card]
+
+/-- The sampled bit environment: `l` bits. -/
+def bitEnv (l : ℕ) : PolySized (fun _ => Fin l → Bool) where
+  width _ := l
+  widthPoly := PolyLength.const l
+  finite _ := inferInstance
+  card_le κ := by simp [Nat.card_eq_fintype_card]
+
+/-- The sampled key environment: `l` keys of `κ` bits each. -/
+def keyEnv (l : ℕ) : PolySized (fun κ => Fin l → BitVector κ) where
+  width κ := l * κ
+  widthPoly := by
+    obtain ⟨p, hp⟩ := PolyLength.id
+    exact ⟨Polynomial.C l * Polynomial.X, fun κ => by simp⟩
+  finite _ := inferInstance
+  card_le κ := by
+    simp [Nat.card_eq_fintype_card, card_vector, ← pow_mul, Nat.mul_comm]
+
+/-- Positions into a poly-length bit vector: `d κ` of them, so `d κ` bits over-counts but
+bounds. -/
+def fin (d : ℕ → ℕ) (h : PolyLength d) : PolySized (fun κ => Fin (d κ)) where
+  width := d
+  widthPoly := h
+  finite _ := inferInstance
+  card_le κ := by
+    simpa [Nat.card_eq_fintype_card] using Nat.le_of_lt (Nat.lt_two_pow_self (n := d κ))
+
+/-- Widths add. -/
+def prod {D E : ℕ → Type} (hD : PolySized D) (hE : PolySized E) :
+    PolySized (fun κ => D κ × E κ) where
+  width κ := hD.width κ + hE.width κ
+  widthPoly := PolyLength.add hD.widthPoly hE.widthPoly
+  finite κ := @Finite.instProd _ _ (hD.finite κ) (hE.finite κ)
+  card_le κ := by
+    haveI := hD.finite κ
+    haveI := hE.finite κ
+    rw [Nat.card_prod, pow_add]
+    exact Nat.mul_le_mul (hD.card_le κ) (hE.card_le κ)
+
+end PolySized
+
+/-- **LM18 Definition 1, length half**: ciphertexts grow polynomially in the message length
+and the security parameter.  Required of any scheme for which the efficiency analysis of the
+reductions is meaningful. -/
+def LengthPoly (enc : encryptionScheme) : Prop :=
+  ∃ p : Polynomial ℕ, ∀ κ n, (enc κ).encryptLength n ≤ p.eval (n + κ)
+
+/-- Evaluation of a polynomial with natural-number coefficients is monotone.  (Mathlib has
+this for ordered semirings via `Polynomial.eval` only in specialised forms; the two-line
+induction is cheaper than hunting for the right instance.) -/
+lemma polyEvalMono {p : Polynomial ℕ} {a b : ℕ} (h : a ≤ b) : p.eval a ≤ p.eval b := by
+  induction p using Polynomial.induction_on' with
+  | add p q hp hq => simpa [Polynomial.eval_add] using Nat.add_le_add hp hq
+  | monomial n c =>
+      simpa [Polynomial.eval_monomial] using Nat.mul_le_mul_left c (Nat.pow_le_pow_left h n)
+
+/-- **The output-length induction of the prose cost analysis, formalised.**
+
+For a *fixed* shape, the length of the bit vector produced by the computational semantics is
+bounded by a polynomial in `κ`.  The `EncS` case is the only one that needs anything: it is
+exactly where `LengthPoly` is consumed, and exactly where an unconstrained `encryptLength`
+would break the induction. -/
+theorem shapeLength_poly (enc : encryptionScheme) (H : LengthPoly enc) (s : Shape) :
+    PolyLength (fun κ => shapeLength κ (enc κ) s) := by
+  unfold PolyLength
+  obtain ⟨p, hp⟩ := H
+  induction s with
+  | BitS => exact ⟨1, by simp [shapeLength]⟩
+  | KeyS => exact ⟨Polynomial.X, by simp [shapeLength]⟩
+  | EmptyS => exact ⟨0, by simp [shapeLength]⟩
+  | PairS s₁ s₂ ih₁ ih₂ =>
+      obtain ⟨q₁, h₁⟩ := ih₁
+      obtain ⟨q₂, h₂⟩ := ih₂
+      exact ⟨q₁ + q₂, fun κ => by
+        simpa [shapeLength] using Nat.add_le_add (h₁ κ) (h₂ κ)⟩
+  | EncS s ih =>
+      obtain ⟨q, h⟩ := ih
+      -- `p (q κ + κ)`: the prose's `p (q (κ) + κ)`.
+      refine ⟨p.comp (q + Polynomial.X), fun κ => ?_⟩
+      simp only [shapeLength, Polynomial.eval_comp, Polynomial.eval_add, Polynomial.eval_X]
+      exact le_trans (hp κ _) (polyEvalMono (Nat.add_le_add_right (h κ) κ))
 
 def allVarsSmallerThanBExpr (e : BitExpr) (n : ℕ ) : Prop :=
   match e with
@@ -268,6 +461,96 @@ lemma evalExpr_key {κ : ℕ} (enc : encryptionFunctions κ) (prg : prgFunctions
       simp [evalExpr, keyVal, evalExpr_key enc prg kVars bVars k, PMF.pure_bind, Bind.bind]
   | Expression.G1 k => by
       simp [evalExpr, keyVal, evalExpr_key enc prg kVars bVars k, PMF.pure_bind, Bind.bind]
+
+/-!
+### Decryption commutes with the semantics
+
+The computational content of F9 (`CHECKPOINT.md` §3.2).  The symbolic evaluator decrypts by
+pattern-matching `Enc k e ↦ e`; a computational evaluator must call `enc.decrypt` and land in
+the same place.  `encryptionFunctions.decrypt_encrypt` is exactly what makes that true, and
+these two lemmas are where it is consumed.
+-/
+
+/-- Computational decryption of an `Enc` node recovers a value the plaintext could have had. -/
+lemma evalExpr_decrypt {κ : ℕ} (enc : encryptionFunctions κ) (prg : prgFunctions κ)
+    (kVars : ℕ → BitVector κ) (bVars : ℕ → Bool)
+    (k : Expression Shape.KeyS) {s : Shape} (e : Expression s) :
+    ∀ c ∈ (evalExpr enc prg kVars bVars (Expression.Enc k e)).support,
+      enc.decrypt (keyVal prg kVars k) c ∈ (evalExpr enc prg kVars bVars e).support := by
+  intro c hc
+  rw [evalExpr] at hc
+  rw [evalExpr_key enc prg kVars bVars k] at hc
+  simp only [Bind.bind, PMF.mem_support_bind_iff, PMF.mem_support_pure_iff] at hc
+  obtain ⟨m, hm, hc⟩ := hc
+  obtain ⟨_, rfl, hc⟩ := hc
+  rw [enc.decrypt_encrypt _ _ _ hc]
+  exact hm
+
+/-- A hole decrypts to the fixed public constant, carrying no information — which is the point
+of `Hidden`. -/
+lemma evalExpr_hidden_decrypt {κ : ℕ} (enc : encryptionFunctions κ) (prg : prgFunctions κ)
+    (kVars : ℕ → BitVector κ) (bVars : ℕ → Bool)
+    (k : Expression Shape.KeyS) {s : Shape} :
+    ∀ c ∈ (evalExpr (s := Shape.EncS s) enc prg kVars bVars (Expression.Hidden k)).support,
+      enc.decrypt (keyVal prg kVars k) c = ones := by
+  intro c hc
+  rw [evalExpr] at hc
+  rw [evalExpr_key enc prg kVars bVars k] at hc
+  simp only [Bind.bind, PMF.mem_support_bind_iff, PMF.mem_support_pure_iff] at hc
+  obtain ⟨_, rfl, hc⟩ := hc
+  exact enc.decrypt_encrypt _ _ _ hc
+
+/-!
+### Splitting a bit vector by shape
+
+`List.Vector.append` is how `Pair` and `Perm` build their values; a computational evaluator has
+to undo it.  Mathlib has the `cons` cases of `get_append` but not the general ones, so they are
+proved here.
+-/
+
+lemma get_append_left : ∀ {n m : ℕ} (a : BitVector n) (b : BitVector m)
+    (i : Fin n) (h : (i.val : ℕ) < n + m),
+    (a.append b).get ⟨i.val, h⟩ = a.get i := by
+  intro n
+  induction n with
+  | zero => intro m a b i h; exact absurd i.isLt (by omega)
+  | succ n ih =>
+      intro m a b i h
+      obtain ⟨x, a', rfl⟩ := a.exists_eq_cons
+      rcases i with ⟨iv, hiv⟩
+      cases iv with
+      | zero => simp [List.Vector.get_append_cons_zero]
+      | succ j =>
+          have := ih a' b ⟨j, by omega⟩ (by omega)
+          simpa [List.Vector.get_append_cons_succ] using this
+
+lemma get_append_right : ∀ {n m : ℕ} (a : BitVector n) (b : BitVector m)
+    (i : Fin m) (h : n + (i.val : ℕ) < n + m),
+    (a.append b).get ⟨n + i.val, h⟩ = b.get i := by
+  intro n
+  induction n with
+  | zero =>
+      intro m a b i h
+      obtain rfl := a.eq_nil
+      obtain ⟨l, hl⟩ := b
+      simp [List.Vector.append, List.Vector.get]
+  | succ n ih =>
+      intro m a b i h
+      obtain ⟨x, a', rfl⟩ := a.exists_eq_cons
+      have := ih a' b i (by omega)
+      simpa [List.Vector.get_append_cons_succ, Nat.succ_add] using this
+
+/-- The first `n` bits. -/
+def vecTake {n m : ℕ} (v : BitVector (n + m)) : BitVector n :=
+  List.Vector.ofFn (fun i : Fin n => v.get ⟨i.val, by omega⟩)
+/-- The last `m` bits. -/
+def vecDrop {n m : ℕ} (v : BitVector (n + m)) : BitVector m :=
+  List.Vector.ofFn (fun i : Fin m => v.get ⟨n + i.val, by omega⟩)
+
+@[simp] lemma vecTake_append {n m : ℕ} (a : BitVector n) (b : BitVector m) :
+    vecTake (a.append b) = a := by simp [vecTake, get_append_left]
+@[simp] lemma vecDrop_append {n m : ℕ} (a : BitVector n) (b : BitVector m) :
+    vecDrop (a.append b) = b := by simp [vecDrop, get_append_right]
 
 def extendFin {k : ℕ} (default : X) (x : Fin k -> X) :  (ℕ -> X) :=
   fun i =>

@@ -5,6 +5,30 @@ import PRGExtension.Expression.Lemmas.HideEncrypted
 import PRGExtension.ComputationalIndistinguishability.Lemmas
 import PRGExtension.Expression.ComputationalSemantics.EncryptionIndCpa
 
+/-!
+# LM18's one-key hiding step, and its IND-CPA reduction
+
+The central reduction of the computational half.  If `key₀` does not occur as a key of `expr`,
+then replacing every subterm encrypted under `key₀` by a hole is computationally invisible —
+because an adversary that noticed would break IND-CPA.
+
+* `reductionToOracle` — the reduction: it walks the expression, evaluating it in a sampled
+  environment, and at every `Enc` under `key₀` calls the left-or-right oracle instead of
+  encrypting, since it does not know `key₀`.  This recursion is what
+  `ComputationalSemantics/CostModel.lean` has to show is feasible, and it is why that file
+  needs closure under sequencing *two oracle computations*.
+* `reductionHidingOneKey` — the reduction closed over the sampled environment.
+* `EncReductionPolyTime` — the efficiency claim about it, with `enc` and `prg` **fixed**:
+  quantifying over all schemes would be false in any concrete cost model and would make every
+  downstream theorem vacuous on instantiation.
+* `symbolicToSemanticIndistinguishabilityHidingOneKey` — the hiding step itself.
+* `seedFree` is mandatory rather than technical: the reduction never learns `key₀`, so it could
+  not compute `prg0 key₀`.
+
+The long comment at the end is the pen-and-paper cost analysis.  It is now formalised in
+`CostModel.lean` — including the one step of it that was **false** as written, marked inline.
+-/
+
 namespace PRG
 
 noncomputable
@@ -1316,14 +1340,25 @@ theorem symbolicToSemanticIndistinguishabilityHidingOneKey
     apply IndistinguishabilityByReduction <;> try assumption
     apply Hreduction
 
--- TODO: does the symbolicToSemanticIndistinguishabilityHidingOneKey signature need to get updated to imcorporate our PRG axiom, etc?
--- TODO: in this file, do we need to update with PRG security notions, or save until Soundness.lean or AdversaryView.lean?
--- TODO: what have remaining after this step? just moving on to the Garbling?
--- TODO: how to update below
+-- (Four planning `TODO`s stood here, all resolved and removed 2026-09-21f.  For the record:
+-- the signature above does take the PRG into account via `seedFree`; PRG *security* is
+-- consumed in `HidingOnePrgSeed.lean`, not here, since this is the IND-CPA hop; and the
+-- chaining of both hops happens in `AdversaryView.lean` and `Soundness.lean`.)
 
 /-
 We now discuss the complexity of `reductionHidingOneKey`, in order to justify the second axiom
 of the polynomial-time predicate `PolyFamOracleCompPred`.
+
+NOTE (2026-09-18c): this analysis is now *formalised*.  `EncReductionPolyTime` is a theorem —
+`PRG.encReduction_polyTime` in `ComputationalSemantics/CostModel.lean` — relative to the
+`PolyTimeModel` interface, and `redFn_polyTime` there is this argument's induction, one proof
+arm per arm of `reductionToOracle` below.  The output-length lemma stated below is
+`PRG.shapeLength_poly` (`ComputationalSemantics/Def.lean`).
+
+That formalisation also exposed a false step, marked inline below: the `EncS` case asserts an
+output-length bound that does *not* follow from the running-time assumption as stated here,
+and is simply untrue for a scheme with `encryptLength n = 2 ^ n`.  It needs `LengthPoly` as a
+separate hypothesis.  Everything else survives unchanged.
 
 Although it is intuitively clear that `reductionHidingOneKey` runs in polynomial time, this
 construction is the weakest link of our proof, so we provide a formal pen-and-paper
@@ -1369,6 +1404,13 @@ The length of the bit vector produced by `reductionToOracle` depends only on the
 
 • Encryption case: s = EncS s′.
   Since encrypt(k, n) runs in time p(n + κ), its output length is also bounded by p(n + κ).
+
+  [2026-09-18c] THIS STEP IS WRONG AS STATED.  `encryptLength` is an arbitrary `ℕ → ℕ` and
+  is not tied to the running time of `encrypt` by anything in the types, so the inference
+  "runs in time p(n + κ), therefore outputs at most p(n + κ) bits" has no formal content
+  here.  Take `encryptLength n = 2 ^ n` and the bound fails outright.  The repaired statement
+  assumes the length bound directly — `LengthPoly enc`, LM18 Definition 1's length half — and
+  the rest of this induction goes through verbatim; see `PRG.shapeLength_poly`.
 
   Here n is the length of the bit vector produced by s′, which by the induction hypothesis
   is bounded by q(κ) for some polynomial q.
@@ -1440,6 +1482,12 @@ oracle call, and one `evalExpr` on an expression of size |e|.  With `EfficientEn
 `PolyTimeClosedUnderComposition` then discharges the whole claim — see
 `reductionToPrgOracle_polyTime`.  Unlike `EncReductionPolyTime`, `PrgReductionPolyTime` is
 therefore a theorem rather than a hypothesis.
+
+[2026-09-18c] The remaining hypothesis of `reductionToPrgOracle_polyTime` — efficiency of the
+sampling prefix itself — is now discharged too, by `PRG.prgEnvSampler_polyTime`, and
+`EfficientEvalPrg` follows from LM18 Definition 1 by
+`PRG.evalEfficiencyFromPrimitives_holds`.  See `Garbling/SecurityFromPrimitives.lean` for the
+security theorem with all of this composed.
 -/
 
 end PRG

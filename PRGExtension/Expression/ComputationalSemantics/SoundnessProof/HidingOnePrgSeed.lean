@@ -6,6 +6,21 @@ import PRGExtension.ComputationalIndistinguishability.Lemmas
 import PRGExtension.Expression.ComputationalSemantics.EncryptionIndCpa
 import PRGExtension.Expression.ComputationalSemantics.PrgSecurity
 
+/-!
+# Idealising one PRG seed, and its reduction
+
+The PRG analogue of `HidingOneKey.lean`.  Replacing `G0 k` and `G1 k` by two fresh independent
+keys is computationally invisible, because an adversary that noticed would break PRG security.
+
+`reductionToPrgOracle` is the reduction.  Unlike the IND-CPA one it needs no induction: it
+samples an environment, queries the oracle once, and evaluates.  That is exactly why
+`PrgReductionPolyTime` is *derivable* (`ComputationalSemantics/PolyTime.lean`) from the
+framework's own composition closure, rather than assumed.
+
+`PrgHopChain` chains single idealisation steps and `prgHopChainSound` proves the chain sound,
+which is what `Soundness.lean` consumes.
+-/
+
 namespace PRG
 
 /--

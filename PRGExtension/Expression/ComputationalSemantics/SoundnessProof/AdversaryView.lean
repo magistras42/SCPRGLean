@@ -13,6 +13,20 @@ import Mathlib.Probability.Distributions.Uniform
 
 import Mathlib.Data.Finset.SDiff
 
+/-!
+# The adversary's view, and the fixpoint step
+
+An adversary holding an expression can recover some keys — by decrypting what it can with what
+it already knows, and by applying the PRG — and not others.  `expressionRecovery` computes that
+closure, as the greatest fixpoint of `Core/Fixpoints.lean`, and `adversaryView_eq_gStar`
+identifies it with LM18's `G*`.
+
+`symbolicToSemanticIndistinguishabilityAdversaryView` is the payoff: replacing every subterm
+encrypted under an unrecoverable key by a hole is computationally invisible.  It is proved by
+iterating the one-key lemma of `HidingOneKey.lean` over the unrecoverable set, with
+`hidingSideCondition` recording what must hold at each step.
+-/
+
 open PRG
 
 noncomputable
@@ -442,8 +456,11 @@ theorem symbolicToSemanticIndistinguishabilityAdversaryView
     `VarK t ∉ exprKeys v` — exactly the side condition `idealize` requires.  The hop
     shortens every chain through `VarK t` by one, so iterating terminates with atomic roots.
 
-  What is missing is the bookkeeping: that this iteration terminates, and that it commutes
-  with `hideEncrypted`/`keyRecovery` so the renaming carries the hidden view along.
+  **That bookkeeping is now done.**  `fixpointStepSound` (`SoundnessProof/FixpointStep.lean`)
+  proves `FixpointStepSound` outright — the iteration terminates and commutes with
+  `hideEncrypted`/`keyRecovery` — which is why `symbolicToSemanticSoundness` carries neither
+  `hidingSideCondition` nor an atomicity hypothesis.  The paragraphs above describe the route
+  taken, not an outstanding obligation.
 -/
 def FixpointStepSound (IsPolyTime : PolyFamOracleCompPred)
     (enc : encryptionScheme) (prg : prgScheme) : Prop :=

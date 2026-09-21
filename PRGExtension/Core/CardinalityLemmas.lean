@@ -8,6 +8,18 @@ import Mathlib.Data.Finset.Basic
 import Mathlib.Data.Fintype.BigOperators
 import Mathlib.Data.Set.Basic
 
+/-!
+# Counting lemmas
+
+Two finite-cardinality facts, used by the uniform-sampling arguments in
+`ComputationalSemantics/RenamePreserves.lean`.
+
+`cardinalityCount` counts the functions `X → Y` that agree with a fixed `v` on a subset `S`:
+there are `|Y| ^ (|X| - |S|)` of them.  That is what makes "resampling the variables outside
+a renaming's support leaves the distribution uniform" a counting argument rather than a
+measure-theoretic one.
+-/
+
 
 instance {n : Nat} : Fintype (Fin n) := by
   infer_instance

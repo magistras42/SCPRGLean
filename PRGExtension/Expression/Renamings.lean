@@ -1,6 +1,18 @@
 import PRGExtension.Expression.Defs
 import PRGExtension.Expression.SymbolicIndistinguishability
 
+/-!
+# The concrete renamings the garbling proof uses
+
+The garbling argument needs specific variable renamings rather than arbitrary ones.
+`bitPerm f` negates the bit variables selected by `f`; `makeKeySwap f` swaps each adjacent pair
+of key indices `(2n, 2n+1)` according to `f`.  `makeVarRenaming` bundles the two and
+`makeTotalRenamingCorrect` proves the result is a valid (bijective) renaming.
+
+Together these realise "flip the bit on this wire and swap its two labels" — the symmetry the
+garbled-table hiding argument exploits.
+-/
+
 --  This file defines renamings of boolean and key variables.
 
 namespace PRG

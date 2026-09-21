@@ -98,6 +98,65 @@ def Garble {s t : WireBundle} (c : Circuit s t) (x : bundleBool s) :
   Expression.Pair r.1
     (Expression.Pair (encodedLabelToExpr (gEnc u x)) (maskedLabelToExpr (gMask r.2.1)))
 
+/-! ## Projectivity
+
+LM18 and the base paper require a garbling scheme to be *projective* before it can be used for
+two-party computation: `Garble` must factor as a function of the circuit alone, followed by a
+selection of one label per wire according to the input bits.  Only then can the input labels be
+handed over by oblivious transfer, one wire at a time, without the garbler learning the input.
+
+The base paper defines `Garble` *through* `preGarble` and recovers the direct form as a lemma.
+Here `Garble` is the direct form, so the adaptation runs the other way: `preGarble` is defined
+separately and `Garble_projective` proves that `Garble` factors through it.  The content is the
+same, and it is already true by construction — `makeLabels` and `gb` never see the input. -/
+
+/-- A pair of encoded labels per wire: the one to hand over for `true` and the one for
+`false`. -/
+def projectionLabelType : WireBundle -> Type :=
+  bundleType (Expression (Shape.PairS Shape.BitS Shape.KeyS)
+    × Expression (Shape.PairS Shape.BitS Shape.KeyS))
+
+/-- Both encodings of a wire label, computed without reference to any input. -/
+def gInputToProjection : {b : WireBundle} -> labelType b -> projectionLabelType b
+  | WireBundle.SimpleB, l =>
+      (Expression.Pair (Expression.BitE (BitExpr.Not l.bitE)) l.key1,
+       Expression.Pair (Expression.BitE l.bitE) l.key0)
+  | WireBundle.PairB _ _, (l1, l2) => (gInputToProjection l1, gInputToProjection l2)
+
+/-- `proj` (base paper §3): select one label per wire according to the input bits.  This is the
+part an oblivious transfer delivers. -/
+def makeProjection : {b : WireBundle} -> projectionLabelType b -> bundleBool b ->
+    encodedLabelType b
+  | WireBundle.SimpleB, l, t => cond t l.1 l.2
+  | WireBundle.PairB _ _, (l1, l2), (t1, t2) => (makeProjection l1 t1, makeProjection l2 t2)
+
+/-- **`preGarble`**: everything `Garble` produces that does not depend on the input — the
+garbled circuit, the output mask, and both labels for each input wire. -/
+def preGarble {s t : WireBundle} (c : Circuit s t) :
+    Expression (garbledShape c) × maskedLabelType t × projectionLabelType s :=
+  let u := (makeLabels s 0).1
+  let r := gb c u (makeLabels s 0).2
+  (r.1, gMask r.2.1, gInputToProjection u)
+
+/-- Selecting from both encodings agrees with encoding directly. -/
+lemma gEncCorrect : ∀ {b : WireBundle} (l : labelType b) (x : bundleBool b),
+    makeProjection (gInputToProjection l) x = gEnc l x
+  | WireBundle.SimpleB, l, x => by cases x <;> simp [gInputToProjection, makeProjection, gEnc]
+  | WireBundle.PairB u w, l, x => by
+      obtain ⟨l1, l2⟩ := l; obtain ⟨x1, x2⟩ := x
+      simp only [gInputToProjection, makeProjection, gEnc]
+      rw [gEncCorrect l1 x1, gEncCorrect l2 x2]
+
+/-- **The scheme is projective.**  `preGarble c` does not mention `x`; the input enters only
+through `makeProjection`, one wire at a time.  This is the property the base paper's §3 route
+from garbling to two-party computation requires. -/
+theorem Garble_projective {s t : WireBundle} (c : Circuit s t) (x : bundleBool s) :
+    Garble c x =
+      Expression.Pair (preGarble c).1
+        (Expression.Pair (encodedLabelToExpr (makeProjection (preGarble c).2.2 x))
+          (maskedLabelToExpr (preGarble c).2.1)) := by
+  simp [Garble, preGarble, gEncCorrect]
+
 /-! ## Symbolic evaluation of a garbled circuit -/
 
 def extractPair : {s1 s2 : Shape} -> (e : Expression (Shape.PairS s1 s2)) ->

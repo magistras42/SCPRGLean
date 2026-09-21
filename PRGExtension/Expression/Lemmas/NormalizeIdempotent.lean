@@ -1,6 +1,17 @@
 import PRGExtension.Expression.Defs
 import PRGExtension.Expression.SymbolicIndistinguishability
 
+/-!
+# Normalisation is idempotent
+
+`normalizeExpr` pushes negations to the leaves, so applying it twice is the same as applying
+it once.  The proof goes through a size measure on bit expressions (`lengthOfBit`) because the
+recursion is not structural: `normalizeB (Not (Not e))` recurses on `e`, two constructors down.
+
+Needed because `normalizeExpr` appears in the *definition* of symbolic indistinguishability,
+which would not be well behaved without it.
+-/
+
 open PRG
 
 def lengthOfBit : BitExpr -> Nat

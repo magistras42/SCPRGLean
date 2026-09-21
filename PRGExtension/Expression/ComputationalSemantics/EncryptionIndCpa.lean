@@ -4,6 +4,21 @@ import VCVio2.VCVio.OracleComp.OracleSpec
 import VCVio2.VCVio.OracleComp.OracleComp
 import VCVio2.VCVio.OracleComp.SimSemantics.SimulateQ
 
+/-!
+# IND-CPA security for the encryption scheme
+
+The left-or-right formulation, as a seeded oracle.  `oracleSpecIndCpa` indexes queries by
+message length; a query carries a *pair* of messages and the oracle answers with an
+encryption of one of them under a key drawn once and held in the seed.
+`encryptionSchemeIndCpa` says the `Side.L` and `Side.R` oracles are indistinguishable to the
+ambient adversary class.
+
+`indCpaOracleImpl` is stateless by construction, with the key in `famSeededOracle.Seed`.  That
+placement matters: an implementation sampling fresh randomness per query would answer repeated
+queries independently and be trivially distinguishable.  See `CHANGELOG.md [2026-09-16]` for
+exactly that bug in `PrgSecurity.lean`.
+-/
+
 -- defines the notion of IND-CPA security for encryption schemes.
 namespace PRG
 

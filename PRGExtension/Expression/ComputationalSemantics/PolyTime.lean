@@ -25,10 +25,14 @@ polynomial-time computability; `prgFunctions` is an arbitrary pair of functions.
 
 `reductionToPrgOracle_polyTime` then *derives* `PrgReductionPolyTime` from two much smaller
 claims, using the framework's own composition closure.  The IND-CPA reduction is not handled
-the same way: `reductionToOracle` recurses over the expression making oracle queries, so the
-analogous decomposition needs closure under sequencing *two oracle computations*, which the
-model does not provide.  `EncReductionPolyTime` therefore remains assumed; the informal cost
-argument for it is at the end of `HidingOneKey.lean`.
+the same way here: `reductionToOracle` recurses over the expression making oracle queries, so
+the analogous decomposition needs closure under sequencing *two oracle computations*, which
+this model does not provide.
+
+That closure — and with it `EncReductionPolyTime` and `EvalEfficiencyFromPrimitives`, both
+of which are hypotheses *in this file* — is supplied by `PolyTimeModel` in
+`ComputationalSemantics/CostModel.lean`, where both become theorems.  The informal cost
+argument they formalise is at the end of `HidingOneKey.lean`.
 -/
 
 open PRG
@@ -92,6 +96,31 @@ def EfficientEnc (IsPolyTime : PolyFamOracleCompPred) (enc : encryptionScheme) :
     (fun κ km => (enc κ).encrypt km.1 km.2)
 
 /--
+**LM18 Definition 1 for the encryption scheme, in the form a cost analysis can consume.**
+
+`EfficientEnc` above fixes the message length `n` independently of `κ`.  That is too weak for
+any induction over an expression: at an `Enc` node the message is the value of the
+sub-expression, whose length `shapeLength κ (enc κ) s` *grows with* `κ`.  So the requirement
+has to range over length *families* — and only over polynomially bounded ones, since a scheme
+whose ciphertexts blow up could not be efficient anyway.
+
+This is where `LengthPoly` (`ComputationalSemantics/Def.lean`) earns its keep:
+`shapeLength_poly` is what supplies the `PolyLength` side condition at each `Enc` node.
+-/
+def EfficientEncPoly (IsPolyTime : PolyFamOracleCompPred) (enc : encryptionScheme) : Prop :=
+  ∀ (d : ℕ → ℕ), PolyLength d →
+    polyTimeFamComp IsPolyTime
+      (Input := fun κ => BitVector κ × BitVector (d κ))
+      (Output := fun κ => BitVector ((enc κ).encryptLength (d κ)))
+      (fun κ km => (enc κ).encrypt km.1 km.2)
+
+/-- The κ-indexed requirement is a strengthening of `EfficientEnc`: take the constant family. -/
+theorem EfficientEncPoly.toEfficientEnc {IsPolyTime : PolyFamOracleCompPred}
+    {enc : encryptionScheme} (h : EfficientEncPoly IsPolyTime enc) :
+    EfficientEnc IsPolyTime enc :=
+  fun n => h (fun _ => n) (PolyLength.const n)
+
+/--
   **What the PRG reduction actually needs**: evaluating a *fixed* expression in a supplied
   environment is a polynomial-time family.  This is LM18 Definition 1 for both primitives
   together with `|e|` being a constant, packaged in the only vocabulary the abstract cost
@@ -132,33 +161,38 @@ theorem reductionToPrgOracle_polyTime
 
 
 /--
-  **The one cost-semantics step the abstract model cannot take.**
+  **`EfficientEvalPrg` from efficiency of the primitives.**
 
-  `EfficientEvalPrg` ought to *follow* from efficiency of the two primitives: `evalExpr`
-  walks a fixed expression, doing one `encrypt`, `prg0` or `prg1` call per node.  Turning
-  "per node" into a polynomial bound needs a cost semantics for that recursion, and
-  `PolyFamOracleCompPred` is an opaque predicate with no such notion — so the implication is
-  named here rather than proved.  It is the same missing ingredient that keeps
-  `EncReductionPolyTime` a hypothesis.
+  `evalExpr` walks a fixed expression doing one `encrypt`, `prg0` or `prg1` call per node, so
+  this ought to *follow* from LM18 Definition 1 rather than be assumed.  It does:
+  `PRG.evalEfficiencyFromPrimitives_holds` in `ComputationalSemantics/CostModel.lean` proves
+  it, relative to the auditable `PolyTimeModel` interface.
 
-  Anything that assumes this gets `EfficientEvalPrg`, and hence `PrgReductionPolyTime`, from
-  LM18 Definition 1 alone.
+  Note the two hypotheses that are *not* the inherited ones.
+
+  * `LengthPoly enc` is mandatory, not a convenience.  Without it `encryptLength n = 2 ^ n`
+    is a legal scheme, the value of a nested `Enc` is exponentially long in the expression
+    depth, and the conclusion is false in any cost model.  The inherited statement omitted it
+    and was therefore not provable as written.
+  * `EfficientEncPoly` rather than `EfficientEnc`, because the message length at an `Enc` node
+    grows with `κ`.  It is the strictly stronger of the two (`EfficientEncPoly.toEfficientEnc`).
 -/
 def EvalEfficiencyFromPrimitives (IsPolyTime : PolyFamOracleCompPred) : Prop :=
   ∀ (enc : encryptionScheme) (prg : prgScheme),
-    EfficientEnc IsPolyTime enc → EfficientPrg IsPolyTime prg →
+    LengthPoly enc → EfficientEncPoly IsPolyTime enc → EfficientPrg IsPolyTime prg →
     EfficientEvalPrg IsPolyTime enc prg
 
-/-- `PrgReductionPolyTime` from LM18 Definition 1, given the cost-semantics step. -/
+/-- `PrgReductionPolyTime` from LM18 Definition 1. -/
 theorem reductionToPrgOracle_polyTime_of_primitives
     (IsPolyTime : PolyFamOracleCompPred)
     (HPolyTime : PolyTimeClosedUnderComposition IsPolyTime)
     (enc : encryptionScheme) (prg : prgScheme)
     (Hsampler : ∀ {s : Shape} (expr : Expression s) (targetSeed : Expression Shape.KeyS)
       (idx0 idx1 : ℕ), IsPolyTime (prgEnvSampler expr targetSeed idx0 idx1))
-    (Hcost : EvalEfficiencyFromPrimitives IsPolyTime)
-    (Henc : EfficientEnc IsPolyTime enc) (Hprg : EfficientPrg IsPolyTime prg) :
+    (Hcost : EvalEfficiencyFromPrimitives IsPolyTime) (Hlen : LengthPoly enc)
+    (Henc : EfficientEncPoly IsPolyTime enc) (Hprg : EfficientPrg IsPolyTime prg) :
     PrgReductionPolyTime IsPolyTime enc prg :=
-  reductionToPrgOracle_polyTime IsPolyTime HPolyTime enc prg Hsampler (Hcost enc prg Henc Hprg)
+  reductionToPrgOracle_polyTime IsPolyTime HPolyTime enc prg Hsampler
+    (Hcost enc prg Hlen Henc Hprg)
 
 end PRG

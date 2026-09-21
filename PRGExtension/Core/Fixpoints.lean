@@ -1,6 +1,19 @@
 import Mathlib.Data.Finset.Basic
 import Mathlib.Data.Finset.Card
 
+/-!
+# Greatest fixpoints of monotone operators on finite sets
+
+`greatestFixpoint f` iterates a monotone `f : Finset α → Finset α` downward from a bound
+until it stabilises, which it must because the carrier is finite.
+`greatestFixpointIsFixpoint` is the stabilisation proof; `fixaccess` is the induction
+principle for reasoning about members of the fixpoint.
+
+Used for the adversary's key-recovery closure in
+`Expression/SymbolicIndistinguishability.lean`: the set of keys an adversary can learn is the
+greatest fixpoint of "keys derivable from what you already hold".
+-/
+
 -- Tis file proves a constructive version of the Knaster–Tarski theorem, showing the existence of fixpoints in a lattice of finite sets.
 namespace PRG
 

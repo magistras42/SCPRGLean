@@ -17,6 +17,22 @@ import Mathlib.Probability.Distributions.Uniform
 
 import Mathlib.Data.Finset.SDiff
 
+/-!
+# LM18 Theorem 1: symbolic soundness
+
+The bridge between the two halves of the development: if two expressions are *symbolically*
+indistinguishable, then their computational semantics are computationally indistinguishable.
+
+`symbolicToSemanticSoundness` is the theorem.  Its proof walks the symbolic relation's
+generators — renaming, the PRG-idealisation hops (`PrgRenameRel`), and the fixpoint step that
+hides everything the adversary cannot recover — discharging each by a reduction proved in
+`SoundnessProof/`.
+
+`symbolicToSemanticSoundnessFromEfficiency` is the same theorem with the PRG reduction's
+efficiency derived rather than assumed.  For the version in which *every* efficiency claim
+about the reductions is discharged, see `Garbling/SecurityFromPrimitives.lean`.
+-/
+
 -- This file proves the soundness theorem: if two expressions are symbolically indistinguishable, then their computational semantics (distributions over bitstrings)  are computationally indistinguishable. The technical details of this proof are in `SoundnessProof/`.
 
 open PRG
@@ -32,10 +48,12 @@ open PRG
   * re-rooting one PRG node — identifying `G0 (VarK t)` and `G1 (VarK t)` with two fresh
     independent atomic keys (`idealize`) — together with its inverse (`symm`).
 
-  We take those generators as the definition.  What is *not* formalised here is the purely
-  symbolic factorisation result [Mic09, Lemma 2] itself, i.e. that every abstractly
-  `𝖦`-preserving map arises this way; the computational content of Lemma 2 is `prgRename`
-  below.
+  We take those generators as the definition, and that loses nothing: **[Mic09, Lemma 2] is
+  formalised in both directions** in `Expression/Lemmas/PseudorandomRenaming.lean`.  The
+  factorisation — that every abstractly `𝖦`-preserving map arises this way — is
+  `gPreserving_eq_substKeys`, `gPreserving_ext` and `rootsOf_keySubterms`; the generation
+  direction is `prgRenameRel_substKeys_general`, in full, with no freshness hypothesis.  The
+  computational content of Lemma 2 is `prgRename` below.
 
   Example: `α_K : {K₁} → {G0 (K₂)}` maps an atomic key to a non-atomic one.  It is realised
   as `atomic` (renaming the dummy back to `K₁`) composed with `symm (idealize …)`.

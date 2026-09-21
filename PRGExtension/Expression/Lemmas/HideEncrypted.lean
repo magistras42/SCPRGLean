@@ -1,6 +1,22 @@
 import PRGExtension.Expression.Defs
 import PRGExtension.Expression.SymbolicIndistinguishability
 
+/-!
+# Replacing subterms by holes
+
+`hideEncryptedS keys p` replaces every subterm of `p` encrypted under a key in `keys` by a
+`Hidden` node — the syntactic operation the entire hiding argument is about.  `hideSelectedS`
+is the variant the reductions use.
+
+`allParts` collects the key subterms a key expression is built from;
+`hideEncryptedSSmallerValue` records that hiding only ever loses information
+(`hideEncryptedS keys p ⊆ p` in the expression-inclusion order); `hideEncryptedPush` is the
+commutation with `Perm` that the `NAnd` cases need.
+
+Note that `⊆` is **shadowed** by `ExpressionInclusion` in every file importing
+`SymbolicIndistinguishability.lean`, this one included.  See `CHECKPOINT.md` §5.
+-/
+
 -- In this module we define some lemmas (mostly about adversary's view)
 open PRG
 

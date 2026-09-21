@@ -6,6 +6,25 @@ import VCVio2.VCVio.OracleComp.OracleSpec
 import VCVio2.VCVio.OracleComp.OracleComp
 import VCVio2.VCVio.OracleComp.SimSemantics.SimulateQ
 
+/-!
+# PRG security
+
+The real-versus-ideal formulation, as a seeded oracle.  The real oracle draws a κ-bit seed and
+answers every query with `(prg0 seed, prg1 seed)`; the ideal oracle draws a uniform 2κ-bit
+pair and answers every query with that.  `prgSchemeSecure` says the two are indistinguishable.
+
+Both oracles are stateless, with the randomness in the **seed**.  That is a fix, not an
+accident: an earlier version sampled inside the query implementation, so the ideal oracle
+answered two queries independently while the real one repeated itself, and a two-query
+distinguisher won with probability `1 - 2 ^ (-2 κ)` — making `prgSchemeSecure` unsatisfiable
+and every theorem assuming it vacuous.  See `CHANGELOG.md [2026-09-16]`.
+
+Worth knowing: PRG security, not IND-CPA, is the hypothesis that actually constrains the
+adversary class.  It is information-theoretically false against unbounded adversaries, since
+`(prg0 s, prg1 s)` covers at most `2 ^ κ` of `2 ^ (2 * κ)` points.  IND-CPA is not — a
+degenerate scheme satisfies it against *every* class (`scratch/DegenerateEnc.lean`).
+-/
+
 namespace PRG
 
 -- The oracle takes a Unit (no meaningful input) and returns a pair of κ-bit strings

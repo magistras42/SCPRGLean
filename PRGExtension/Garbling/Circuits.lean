@@ -2,6 +2,21 @@ import PRGExtension.Expression.Defs
 import PRGExtension.Expression.SymbolicIndistinguishability
 import PRGExtension.Expression.Lemmas.ReplacePRG
 
+/-!
+# Circuits and wire bundles
+
+The object being garbled.  A `Circuit input output` is built from `NandC`, `DupC`, swaps and
+composition over `WireBundle`s — binary trees of wires — and `evalCircuit` gives its semantics
+on `bundleBool`.  `notC`, `andC` and `prodC` are derived gates.
+
+`WireLabel` is what garbling assigns to a wire: a key index and a mask bit.  `labelType` lifts
+labels over bundles the same way `bundleBool` lifts booleans.
+
+**Two notations declared here shadow standard syntax** in `Garbling/` and anything importing
+it: `(x, y)` means `WireBundle.PairB x y`, and `o` means `WireBundle.SimpleB`.  Ordinary tuple
+syntax will not elaborate as you expect.  See `CHECKPOINT.md` §5.
+-/
+
 -- Circuits, defined inductively (LM18 §3).  The circuit language itself is independent of
 -- the expression language; what changes in the PRG setting is `labelType`: a wire label
 -- now carries key *expressions* rather than variable indices, because a `Dup` gate

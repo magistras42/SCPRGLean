@@ -1,6 +1,14 @@
 import PRGExtension.Expression.Defs
 import PRGExtension.Expression.SymbolicIndistinguishability
 
+/-!
+# Renamings commute
+
+Two small commutation facts: normalisation commutes with key renaming, and key and bit
+renamings commute with each other.  Both are needed to put a composite renaming into a normal
+form before reasoning about it.
+-/
+
 
 open PRG
 

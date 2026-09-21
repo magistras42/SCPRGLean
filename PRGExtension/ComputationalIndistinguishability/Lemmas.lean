@@ -1,5 +1,19 @@
 import PRGExtension.ComputationalIndistinguishability.Def
 
+/-!
+# Metric and negligibility lemmas
+
+Support for `ComputationalIndistinguishability/Def.lean`.  The distance on `NNReal` is a
+metric (`distSymm`, `distTriangle`, `distSelf`); negligible functions are closed under sums
+and domination (`neglSum`, `neglMonotone`, `neglTriangle`); and computational
+indistinguishability of distribution families is an equivalence relation (`indRfl`, `indSym`,
+`indTrans`), which is what lets the soundness proof chain game hops.
+
+`CompIndistinguishabilityDistrDef2` and `CompIndistinguishabilityDistrDefEq` give an
+equivalent phrasing that is more convenient when a distinguisher has to be *built* rather
+than consumed.
+-/
+
 -- This file proves basic properties of indistinguishability, such as transitivity and symmetry. It also includes the lemma `IndistinguishabilityByReduction`, which shows how to use reductions to prove indistinguishability.
 
 lemma distSymm (x y : NNReal) : distance x y = distance y x := by
