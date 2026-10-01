@@ -1,4 +1,4 @@
-import PRGExtension.Expression.ComputationalSemantics.CostModel
+import PRGExtension.Expression.ComputationalSemantics.Efficiency.CostModel
 
 /-! Attempt at Design B step 1: a structural `cost` on `OracleComp`. -/
 

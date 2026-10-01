@@ -16,7 +16,7 @@ Two things were wrong with the inherited treatment.
 In any concrete cost model that is false: pick an inefficient encryption scheme and its
 reduction is inefficient too.  So every downstream theorem would have become vacuous the
 moment `IsPolyTime` was instantiated — the same defect as the `Seed := Unit` bug in
-`PrgSecurity.lean`.  `EncReductionPolyTime` and `PrgReductionPolyTime` fix this by fixing
+`Games.lean` (the PRG game).  `EncReductionPolyTime` and `PrgReductionPolyTime` fix this by fixing
 `enc` and `prg`.
 
 **The PRG was never required to be efficient at all.**  LM18 Definition 1 demands

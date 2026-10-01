@@ -1,4 +1,4 @@
-import PRGExtension.Expression.ComputationalSemantics.PolyTime
+import PRGExtension.Expression.ComputationalSemantics.Efficiency.PolyTime
 import PRGExtension.Expression.ComputationalSemantics.SoundnessProof.HidingOneKey
 
 /-!
@@ -1012,7 +1012,7 @@ which is exactly what a predicate that charges nothing would do.  Note which hyp
 it out, because it is not the obvious one:
 IND-CPA security is *satisfiable* under `fun _ => True`, by a scheme whose ciphertext ignores
 the message — `encryptionFunctions` has no correctness field, so such a scheme is legal and
-its two IND-CPA oracles are literally equal (`scratch/DegenerateEnc.lean` proves it).  What
+its two IND-CPA oracles are literally equal (`scratch/archive/DegenerateEnc.lean` proves it).  What
 fails is **PRG security**: the real oracle answers with `(prg0 s, prg1 s)` for a κ-bit seed
 while the ideal answers with a uniform 2κ-bit pair, so an unbounded distinguisher deciding
 membership in the image wins with advantage at least `1 - 2 ^ (-κ)`, and no `prg` escapes

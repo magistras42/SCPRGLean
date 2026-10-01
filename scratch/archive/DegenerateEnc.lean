@@ -1,4 +1,4 @@
-import PRGExtension.Expression.ComputationalSemantics.CostModel
+import PRGExtension.Expression.ComputationalSemantics.Efficiency.CostModel
 
 /-!
 # The F4 loophole, and its closure
@@ -12,7 +12,7 @@ It was legal because `encryptionFunctions` related `encrypt` and `decrypt` by no
 **Adding `decrypt_encrypt` (F9, 2026-09-21g) closed the loophole**: the scheme is no longer
 constructible, because its obligation reduces to `ones = msg` for every message.
 
-Run with `lake env lean scratch/DegenerateEnc.lean`.
+Run with `lake env lean scratch/archive/DegenerateEnc.lean`.
 -/
 
 namespace PRG

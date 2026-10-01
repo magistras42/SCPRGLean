@@ -5,7 +5,7 @@ import PRGExtension.Expression.ComputationalSemantics.Soundness
 # Computational security of the PRG-based garbling scheme
 
 The payoff.  LM18 Theorem 5 (`theorem5`) says the garbled circuit and the simulated one are
-*symbolically* indistinguishable; LM18 Theorem 1 (`symbolicToSemanticSoundness`) says
+*symbolically* indistinguishable; LM18 Theorem 3 (`symbolicToSemanticSoundness`) says
 symbolic indistinguishability implies computational indistinguishability.  Composing them
 gives simulation security of the garbling scheme from IND-CPA security of the encryption
 scheme and security of the PRG — with no side conditions.

@@ -16,5 +16,6 @@ require "leanprover-community" / "mathlib"
 lean_lib «SymbolicGarbledCircuitsInLean» where
   -- add any library configuration options here
 
+@[default_target]
 lean_lib «PRGExtension» where
   -- add any library configuration options here

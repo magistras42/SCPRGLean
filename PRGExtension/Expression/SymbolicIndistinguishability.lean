@@ -483,7 +483,7 @@ lemma strictYields_keySubterms : ∀ (k e : Expression Shape.KeyS),
       simp only [keySubterms, Finset.mem_union, Finset.mem_singleton, not_or]
       exact ⟨fun hc => hne hc.symm, strictYields_keySubterms k sd h.2 h.1⟩
 
--- LM18 Lemma 3, property 3: `𝖦⁺(VarK key₀) ∩ Keys(e) = ∅`, i.e. `key₀` is never used as a
+-- LM18 Lemma 6, property 1 (seed-freeness): `𝖦⁺(VarK key₀) ∩ Keys(e) = ∅`, i.e. `key₀` is never used as a
 -- PRG seed anywhere in `e`.  This is exactly what the IND-CPA reduction needs: the
 -- reduction never learns the value of `key₀`, so it must never be required to compute
 -- `prg0 key₀` or `prg1 key₀`.
@@ -1216,7 +1216,7 @@ lemma seedFree_of_atomicKeys {s : Shape} {e : Expression s} (h : AtomicKeys e) (
   | G1 _ => simp [isAtomicKey] at hat
 
 -- ===================================================================================
--- Atomicisation: LM18 Lemma 3, property 1.
+-- Atomicisation: LM18 Lemma 4 (atomicity).
 --
 --   "If `Roots(Keys(e)) ⊆ 𝐊` then every key the hiding step removes is atomic."
 --
@@ -1522,7 +1522,7 @@ def rOf {s : Shape} (e : Expression s) : Finset (Expression Shape.KeyS) :=
   prgClosure (keySubterms e) (extractKeys e ∪ ancestorKeys (exprKeys e))
 
 /--
-  **LM18 Lemma 3, property 1 — the atomicisation lemma.**
+  **LM18 Lemma 4 — the atomicisation lemma.**
 
   If the *roots* of `Keys(e)` are atomic, then every key of `Keys(e)` that is not recovered
   — i.e. every key the pattern function is about to hide behind — is itself atomic.
@@ -1609,7 +1609,7 @@ lemma keyRecoveryContained {s : Shape} (p : Expression s) (S : Finset (Expressio
 --     hide Y e               = Hidden (VarK 0)        -- VarK 0 ∉ Y
 --     extractKeys (hide Y e) = ∅          so  Y ⊆ ∅  fails.
 --
--- (`scratch/ExtractKeysSelfCounterexample.lean` computes this.)  Its only consumer, the
+-- (`scratch/findings/ExtractKeysSelfCounterexample.lean` computes this.)  Its only consumer, the
 -- fixpoint step of `symbolicToSemanticIndistinguishabilityAdversaryView`, no longer needs
 -- it: that step now hides `z \ keyRecovery expr z` in one IND-CPA application instead of
 -- routing through the (also false) `H_ext_eq`.

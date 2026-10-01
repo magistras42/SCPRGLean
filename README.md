@@ -10,6 +10,20 @@ This repository is based on the paper:
 
 We recommend reading the project report and the paper it was based on as it provides the high-level overview and the intuition behind the formalization.
 
+Documents, shortest first:
+
+| file | what it is |
+| --- | --- |
+| [`summary.tex`](summary.tex) | general overview of the whole development, for cryptographers — 9 pages; builds with **any** engine |
+| [`summary.md`](summary.md) | deviations from the pen-and-paper proofs, the proof chain, and the adversary model |
+| [`report.md`](report.md) | file-by-file guide and the defect analysis |
+| [`writeup.tex`](writeup.tex) / [`writeup.md`](writeup.md) | the full report: proof structure, worked example, LM18 conformance, SymGC measurements |
+| [`FUTURE-WORK.md`](FUTURE-WORK.md) | what is not done, with cost estimates |
+| [`CHANGELOG.md`](CHANGELOG.md) | dated record of every change |
+
+`writeup.tex` builds with **LuaLaTeX or XeLaTeX** (not pdfLaTeX — it loads `fontspec`); on
+Overleaf set the compiler in *Menu → Compiler*.
+
 ## Building the Project
 
 To build the project (i.e. to verify the proofs), run `lake build` from the root directory of this repository.
@@ -57,8 +71,10 @@ The `Expression/ComputationalSemantics` submodule contains the following files:
 
 1. `Def.lean` defines the computational semantics of an expression, i.e. a function that maps an expression (and an encryption scheme) to a distribution over bitstrings.
 2. `NormalizePreserves.lean` and `RenamePreserves.lean` prove that normalization and renaming do not change the computational semantics.
-3. `EncryptionIndCpa.lean` defines the notion of IND-CPA security for encryption schemes.
+3. `Games.lean` defines the two primitive security games: IND-CPA security for encryption schemes (`encryptionSchemeIndCpa`) and security of the PRG (`prgSchemeSecure`).
 4. `Soundness.lean` proves the soundness theorem: if two expressions are symbolically indistinguishable, then their computational semantics (distributions over bitstrings)  are computationally indistinguishable. The technical details of this proof are in `SoundnessProof`.
+5. `Efficiency/` holds the efficiency layer — `PolyTime.lean`, `CostModel.lean` and `GeneratedPolyTime.lean` — which discharges the reductions' poly-time hypotheses.
+6. `Executable/` holds the refinement to running code — `Executable.lean` (`ExecEnc`, and the support refinement), `ExecutableDistribution.lean` (the distributional refinement `execDistr_eq`) and `SeededEnvironment.lean` (expanding wire keys from one seed).
 
 ### (Omitted) Symbolic Security of Garbled Circuits
 
@@ -69,9 +85,9 @@ Thanks to the soundness theorem, this boils down to proving symbolic indistingui
 2. `GarblingDef.lean` – Defines the garbling scheme. The main definitions are:
    * `Garble`: garbles the circuit,
    * `GEval`: evaluates the garbled circuit symbolically.
-3. `Simulation.lean` – Defines the simulation procedure (`SimulateG`), used to establish the security of garbling.
-4. `Security.lean` – Proves the security of the garbling scheme. Thanks to the soundness theorem, the main goal here is to prove symbolic indistinguishability. The main lemma is `garblingSecure`.
-5. `Correctness.lean` – Proves the correctness of the garbling scheme at the symbolic level. The main lemma is `garbleCorrect`.
+3. `Simulate.lean` – Defines the simulation procedure (`Simulate`), used to establish the security of garbling.
+4. `Security/` – Proves the security of the garbling scheme. Thanks to the soundness theorem, the main goal here is to prove symbolic indistinguishability. `Security/Security.lean` has the main lemma `garblingSecure`; `Security/SecurityFromPrimitives.lean` has `garblingSecureRelative`, the statement to cite; `Security/ExecutableSecurity.lean` carries it to the distributions an implementation actually produces.
+5. `Correctness/` – Proves correctness at three levels: `Correctness/Correctness.lean` symbolically (`garbleCorrect`), `Correctness/ComputationalCorrectness.lean` over bit strings (`garbleCorrectComp`), and `Correctness/ExecutableCorrectness.lean` for code that runs (`garbleExecCorrect`).
 
 The proof of symbolic security depends on the results from  `SymbolicHiding/` submodule:
 
@@ -80,8 +96,19 @@ The proof of symbolic security depends on the results from  `SymbolicHiding/` su
 * `SimulateProof.lean` analogous to `GarbleProof.lean` and `GarbleHole.lean`, but for the simulated garbled circuit.
 * `GarbleHoleBitSwap.lean` constructs explicitly a variable renaming maps from the actual garbled circuit to the simulated one.
 
+### PRGExtension/Crypto
+
+Concrete instantiations, so that the interfaces are inhabited by something real rather than a toy.
+
+1. `ChaCha20.lean` gives ChaCha20 (RFC 8439) in pure Lean and instantiates both primitives at κ = 256: `chacha20Enc` (counter mode, nonce as coins) and `chacha20Prg` (the two halves of one keystream block). Correctness is proved; agreement with RFC 8439 is validated by test vectors against OpenSSL (`scratch/checks/ChaCha20Kat.lean`); security is assumed.
+2. `StreamCipher.lean` isolates `prfFunctions`, the keyed keystream generator the cipher is built from, and shows `chacha20Enc` *is* the generic counter-mode construction over it (`chacha20Enc_eq`, by `rfl`). `prgOfPrf` and `chacha20Prg_eq` show the length-doubling PRG is that same generator at nonce zero — one primitive seen through two interfaces.
+3. `Ggm.lean` gives the Goldreich–Goldwasser–Micali tree, which turns a `prgFunctions` into a `prfFunctions` and hence into an encryption scheme built from the PRG alone. Construction only — the security theorems for both routes are scoped in `FUTURE-WORK.md`.
+4. `DomainSeparation.lean` reserves one nonce bit so that the cipher and the PRG — which `StreamCipher.lean` proves are one primitive — provably query it at disjoint inputs. `dsNonceDisjoint` is the theorem; `chacha20EncDS` / `chacha20PrgDS` are the instance. See `FUTURE-WORK.md` R2.
+
+Neither file adds an assumption or changes an existing statement: `garblingSecure` and its relatives still take the encryption scheme and the PRG as independent parameters.
+
 ## DEMO
-This artifact is essentially a library for computationally-sound, symmetric-key cryptography. Originally, I was going to show its utility by using it to formalize a PRG-based garbled circuit implementation, but I ran out of time. The `Soundness.lean` file represents the culmination of my formalization efforts.
+This artifact is essentially a library for computationally-sound, symmetric-key cryptography. Garbling/ is complete with symbolic security, symbolic and computational correctness, projectivity, and an executable implementation.
 
 ## Bibliography
 

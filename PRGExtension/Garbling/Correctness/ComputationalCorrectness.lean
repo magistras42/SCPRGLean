@@ -1,11 +1,11 @@
-import PRGExtension.Garbling.Correctness
+import PRGExtension.Garbling.Correctness.Correctness
 import PRGExtension.Expression.ComputationalSemantics.Def
 import PRGExtension.Expression.ComputationalSemantics.NormalizePreserves
 
 /-!
 # Computational correctness of the garbling scheme
 
-`garbleCorrect` (`Garbling/Correctness.lean`) is LM18 Theorem 4 *symbolically*: the symbolic
+`garbleCorrect` (`Garbling/Correctness/Correctness.lean`) is LM18 Theorem 4 *symbolically*: the symbolic
 evaluator, which decrypts by pattern-matching `Enc k e ↦ e`, returns `C(x)`.  That says nothing
 about real bit strings.  This file supplies the computational statement — the base paper's
 correctness definition, `Evaluate(Garble(C,x)) = C(x)` — as `garbleCorrectComp`.
@@ -31,7 +31,13 @@ Three replacements turn `gEv` into `gEvComp`:
 case for case.  `garbleCorrectComp` assembles it with `decodeComp_correct`.
 
 Note that `gEvComp` is *total* where `gEv` returns `Option`: the symbolic partiality comes
-only from pattern-match failure on expressions that cannot arise.
+only from pattern-match failure on expressions that cannot arise.  One source of that
+partiality is `decrypt`'s hole arm, and it is the one place where the two evaluators disagree
+rather than merely differ in totality — `evalExpr_hidden_decrypt` says a hole's bits decrypt to
+`ones`, a wrong wire label rather than a failure.  `garble_holeFree` (`Garbling/HoleFree.lean`)
+is why that is unreachable: no garbled circuit contains a hole.  `gEvComp_sim`'s
+`gEv c g i = some ov` hypothesis still carries the rest of the structural invariant, so it
+stays.
 -/
 namespace PRG
 
@@ -71,25 +77,36 @@ becomes selection by the encoded bit (point-and-permute — the row for the true
 at index `β`, because `Perm` puts `c_{B}` first and the encoded bit is `B xor x`), and
 `decrypt` becomes `enc.decrypt`.  Unlike `gEv` it is total: the partiality of the symbolic
 version comes only from pattern-match failure. -/
-def gEvComp {κ : ℕ} (enc : encryptionFunctions κ) (prg : prgFunctions κ) :
+def gEvCompOn {κ : ℕ} (encLen : ℕ → ℕ)
+    (dec : {n : ℕ} → BitVector κ → BitVector (encLen n) → BitVector n)
+    (prg : prgFunctions κ) :
     {inp out : WireBundle} → (c : Circuit inp out) →
-    BitVector (shapeLength κ enc (garbledShape c)) →
+    BitVector (shapeLengthOn κ encLen (garbledShape c)) →
     encodedValType κ inp → encodedValType κ out
   | _, _, Circuit.SwapC _ _, _, (i1, i2) => (i2, i1)
   | _, _, Circuit.AssocC _ _ _, _, (w1, (w2, w3)) => ((w1, w2), w3)
   | _, _, Circuit.UnAssocC _ _ _, _, ((w1, w2), w3) => (w1, (w2, w3))
   | _, _, Circuit.DupC, _, (b, k) => ((b, prg.prg0 k), (b, prg.prg1 k))
-  | _, _, Circuit.FirstC c _, gv, (i1, i2) => (gEvComp enc prg c gv i1, i2)
+  | _, _, Circuit.FirstC c _, gv, (i1, i2) => (gEvCompOn encLen dec prg c gv i1, i2)
   | _, _, Circuit.ComposeC c1 c2, gv, i =>
-      gEvComp enc prg c2 (vecDrop gv) (gEvComp enc prg c1 (vecTake gv) i)
+      gEvCompOn encLen dec prg c2 (vecDrop gv) (gEvCompOn encLen dec prg c1 (vecTake gv) i)
   | _, _, Circuit.NandC, gv, ((b0, k0), (b1, k1)) =>
-      let row2 : BitVector (shapeLength κ enc (Shape.PairS nandOne nandOne)) :=
+      let row2 : BitVector (shapeLengthOn κ encLen (Shape.PairS nandOne nandOne)) :=
         if b0 then vecDrop gv else vecTake gv
-      let row1 : BitVector (shapeLength κ enc nandOne) :=
+      let row1 : BitVector (shapeLengthOn κ encLen nandOne) :=
         if b1 then vecDrop row2 else vecTake row2
-      let c3 := enc.decrypt (n := enc.encryptLength (1 + κ)) k0 row1
-      let c4 := enc.decrypt (n := 1 + κ) k1 c3
+      let c3 := dec (n := encLen (1 + κ)) k0 row1
+      let c4 := dec (n := 1 + κ) k1 c3
       ((vecTake (n := 1) (m := κ) c4).get 0, vecDrop (n := 1) (m := κ) c4)
+
+/-- The evaluator at a specification scheme.  *Delta*-equal to `gEvCompOn` at that scheme's
+`encryptLength` and `decrypt`, which is what lets an executable implementation reuse this
+file's theorems verbatim. -/
+def gEvComp {κ : ℕ} (enc : encryptionFunctions κ) (prg : prgFunctions κ) :
+    {inp out : WireBundle} → (c : Circuit inp out) →
+    BitVector (shapeLength κ enc (garbledShape c)) →
+    encodedValType κ inp → encodedValType κ out :=
+  gEvCompOn enc.encryptLength enc.decrypt prg
 
 end PRG
 
@@ -266,14 +283,16 @@ theorem gEvComp_sim : ∀ {inp out : WireBundle} (c : Circuit inp out)
       cases i with | Pair b k =>
       cases b with | BitE b' =>
       simp [gEv] at h; subst h
-      simp [gEvComp, encodedLabelVal, encLabelVal, keyVal]
+      simp [gEvComp, gEvCompOn, encodedLabelVal, encLabelVal, keyVal]
   | FirstC c u ih =>
       intro g i ov h gv hgv
       obtain ⟨i1, i2⟩ := i
       simp only [gEv] at h
       rcases hx : gEv c g i1 with _ | ov1 <;> rw [hx] at h <;> simp at h
       subst h
-      simp only [gEvComp, encodedLabelVal, ih g i1 ov1 hx gv hgv]
+      have ihx := ih g i1 ov1 hx gv hgv
+      simp only [gEvComp] at ihx
+      simp only [gEvComp, gEvCompOn, encodedLabelVal, ihx]
   | ComposeC c1 c2 ih1 ih2 =>
       intro g i ov h gv hgv
       simp only [gEv] at h
@@ -281,9 +300,10 @@ theorem gEvComp_sim : ∀ {inp out : WireBundle} (c : Circuit inp out)
       obtain rfl := extractPair_eq g g1 g2 hp
       obtain ⟨v1, hv1, v2, hv2, rfl⟩ := (mem_support_pair_iff g1 g2 gv).mp hgv
       rcases hx : gEv c1 g1 i with _ | m <;> rw [hx] at h <;> simp at h
-      simp only [gEvComp, vecTake_append, vecDrop_append]
-      rw [ih1 g1 i m hx v1 hv1]
-      exact ih2 g2 m ov h v2 hv2
+      have ihx1 := ih1 g1 i m hx v1 hv1
+      have ihx2 := ih2 g2 m ov h v2 hv2
+      simp only [gEvComp] at ihx1 ihx2
+      simp only [gEvComp, gEvCompOn, vecTake_append, vecDrop_append, ihx1, ihx2]
   | NandC =>
       intro g i ov h gv hgv
       obtain ⟨i0, i1⟩ := i
@@ -315,7 +335,7 @@ theorem gEvComp_sim : ∀ {inp out : WireBundle} (c : Circuit inp out)
       cases c4 with | Pair cb ck => cases cb with | BitE cb' =>
       have h3 := evalExpr_decrypt enc prg kVars bVars k0 _ _ hrow1
       have h4 := evalExpr_decrypt enc prg kVars bVars k1 _ _ h3
-      simp only [gEvComp, encodedLabelVal, encLabelVal]
+      simp only [gEvComp, gEvCompOn, encodedLabelVal, encLabelVal]
       exact encLabelVal_of_support cb' ck _ h4
 
 end PRG
@@ -342,11 +362,15 @@ lemma decodeComp_correct : ∀ (b : WireBundle) (lbl : labelType b) (outv : bund
       rw [decodeComp_correct u l1 o1, decodeComp_correct w l2 o2]
 
 /-- Parse an encoded bundle out of its bit vector. -/
-def parseEncodedVal (enc : encryptionFunctions κ) :
-    (b : WireBundle) → BitVector (shapeLength κ enc (encodedShape b)) → encodedValType κ b
+def parseEncodedValOn (encLen : ℕ → ℕ) :
+    (b : WireBundle) → BitVector (shapeLengthOn κ encLen (encodedShape b)) → encodedValType κ b
   | WireBundle.SimpleB, v => ((vecTake (n := 1) (m := κ) v).get 0, vecDrop (n := 1) (m := κ) v)
   | WireBundle.PairB u w, v =>
-      (parseEncodedVal enc u (vecTake v), parseEncodedVal enc w (vecDrop v))
+      (parseEncodedValOn encLen u (vecTake v), parseEncodedValOn encLen w (vecDrop v))
+
+def parseEncodedVal (enc : encryptionFunctions κ) :
+    (b : WireBundle) → BitVector (shapeLength κ enc (encodedShape b)) → encodedValType κ b :=
+  parseEncodedValOn enc.encryptLength
 
 lemma parseEncodedVal_of_support : ∀ (b : WireBundle) (i : encodedLabelType b) (v),
     v ∈ (evalExpr enc prg kVars bVars (encodedLabelToExpr i)).support →
@@ -358,8 +382,11 @@ lemma parseEncodedVal_of_support : ∀ (b : WireBundle) (i : encodedLabelType b)
       obtain ⟨i1, i2⟩ := i
       simp only [encodedLabelToExpr] at hv
       obtain ⟨v1, hv1, v2, hv2, rfl⟩ := (mem_support_pair_iff _ _ v).mp hv
-      simp only [parseEncodedVal, encodedLabelVal, vecTake_append, vecDrop_append]
-      rw [parseEncodedVal_of_support u i1 v1 hv1, parseEncodedVal_of_support w i2 v2 hv2]
+      have h1 := parseEncodedVal_of_support u i1 v1 hv1
+      have h2 := parseEncodedVal_of_support w i2 v2 hv2
+      simp only [parseEncodedVal] at h1 h2
+      simp only [parseEncodedVal, parseEncodedValOn, encodedLabelVal, vecTake_append,
+        vecDrop_append, h1, h2]
 
 end PRG
 
@@ -367,10 +394,15 @@ namespace PRG
 variable {κ : ℕ} {enc : encryptionFunctions κ} {prg : prgFunctions κ}
   {kVars : ℕ → BitVector κ} {bVars : ℕ → Bool}
 
-def parseMaskVal (enc : encryptionFunctions κ) :
-    (b : WireBundle) → BitVector (shapeLength κ enc (maskShape b)) → maskValType b
+def parseMaskValOn (encLen : ℕ → ℕ) :
+    (b : WireBundle) → BitVector (shapeLengthOn κ encLen (maskShape b)) → maskValType b
   | WireBundle.SimpleB, v => (show BitVector 1 from v).get 0
-  | WireBundle.PairB u w, v => (parseMaskVal enc u (vecTake v), parseMaskVal enc w (vecDrop v))
+  | WireBundle.PairB u w, v =>
+      (parseMaskValOn encLen u (vecTake v), parseMaskValOn encLen w (vecDrop v))
+
+def parseMaskVal (enc : encryptionFunctions κ) :
+    (b : WireBundle) → BitVector (shapeLength κ enc (maskShape b)) → maskValType b :=
+  parseMaskValOn enc.encryptLength
 
 lemma parseMaskVal_of_support : ∀ (b : WireBundle) (m : maskedLabelType b) (v),
     v ∈ (evalExpr enc prg kVars bVars (maskedLabelToExpr m)).support →
@@ -379,21 +411,31 @@ lemma parseMaskVal_of_support : ∀ (b : WireBundle) (m : maskedLabelType b) (v)
       cases m with | BitE mb =>
       simp only [maskedLabelToExpr, evalExpr, PMF.mem_support_pure_iff, Pure.pure] at hv
       subst hv
-      simp [parseMaskVal, maskedLabelVal, List.Vector.get]
+      simp [parseMaskVal, parseMaskValOn, maskedLabelVal, List.Vector.get]
   | WireBundle.PairB u w, m, v, hv => by
       obtain ⟨m1, m2⟩ := m
       simp only [maskedLabelToExpr] at hv
       obtain ⟨v1, hv1, v2, hv2, rfl⟩ := (mem_support_pair_iff _ _ v).mp hv
-      simp only [parseMaskVal, maskedLabelVal, vecTake_append, vecDrop_append]
-      rw [parseMaskVal_of_support u m1 v1 hv1, parseMaskVal_of_support w m2 v2 hv2]
+      have h1 := parseMaskVal_of_support u m1 v1 hv1
+      have h2 := parseMaskVal_of_support w m2 v2 hv2
+      simp only [parseMaskVal] at h1 h2
+      simp only [parseMaskVal, parseMaskValOn, maskedLabelVal, vecTake_append,
+        vecDrop_append, h1, h2]
 
 /-- **`Evaluate`** (LM18/the base paper's correctness definition): parse the garbled output,
 run the computational evaluator, decode. -/
+def EvaluateCompOn (encLen : ℕ → ℕ)
+    (dec : {n : ℕ} → BitVector κ → BitVector (encLen n) → BitVector n)
+    (prg : prgFunctions κ) {s t : WireBundle}
+    (c : Circuit s t) (v : BitVector (shapeLengthOn κ encLen (garbleShapeFull c))) : bundleBool t :=
+  decodeComp (gEvCompOn encLen dec prg c (vecTake v)
+      (parseEncodedValOn encLen s (vecTake (vecDrop v))))
+    (parseMaskValOn encLen t (vecDrop (vecDrop v)))
+
+/-- **`Evaluate`** at a specification scheme; *delta*-equal to `EvaluateCompOn`. -/
 def EvaluateComp (enc : encryptionFunctions κ) (prg : prgFunctions κ) {s t : WireBundle}
     (c : Circuit s t) (v : BitVector (shapeLength κ enc (garbleShapeFull c))) : bundleBool t :=
-  decodeComp (gEvComp enc prg c (vecTake v)
-      (parseEncodedVal enc s (vecTake (vecDrop v))))
-    (parseMaskVal enc t (vecDrop (vecDrop v)))
+  EvaluateCompOn enc.encryptLength enc.decrypt prg c v
 
 /-- **Computational correctness of the garbling scheme.**  The computational counterpart of
 `garbleCorrect`: every bit vector the garbled circuit can actually take evaluates to `C(x)`. -/
@@ -404,9 +446,13 @@ theorem garbleCorrectComp {s t : WireBundle} (c : Circuit s t) (x : bundleBool s
   simp only [Garble] at hv
   obtain ⟨gv, hgv, rest, hrest, rfl⟩ := (mem_support_pair_iff _ _ v).mp hv
   obtain ⟨iv, hiv, mv, hmv, rfl⟩ := (mem_support_pair_iff _ _ rest).mp hrest
-  simp only [EvaluateComp, vecTake_append, vecDrop_append]
-  rw [parseEncodedVal_of_support _ _ iv hiv, parseMaskVal_of_support _ _ mv hmv]
-  rw [gEvComp_sim c _ _ _ (gEvCorrect c (makeLabels s 0).1 (makeLabels s 0).2 x) gv hgv]
+  have hi := parseEncodedVal_of_support _ _ iv hiv
+  have hm := parseMaskVal_of_support _ _ mv hmv
+  have hg := gEvComp_sim c _ _ _ (gEvCorrect c (makeLabels s 0).1 (makeLabels s 0).2 x) gv hgv
+  simp only [parseEncodedVal] at hi
+  simp only [parseMaskVal] at hm
+  simp only [gEvComp] at hg
+  simp only [EvaluateComp, EvaluateCompOn, vecTake_append, vecDrop_append, hi, hm, hg]
   exact decodeComp_correct _ _ _
 
 end PRG

@@ -1,6 +1,6 @@
-import PRGExtension.Garbling.Security
-import PRGExtension.Expression.ComputationalSemantics.CostModel
-import PRGExtension.Expression.ComputationalSemantics.GeneratedPolyTime
+import PRGExtension.Garbling.Security.Security
+import PRGExtension.Expression.ComputationalSemantics.Efficiency.CostModel
+import PRGExtension.Expression.ComputationalSemantics.Efficiency.GeneratedPolyTime
 
 /-!
 # Computational security from the primitives alone

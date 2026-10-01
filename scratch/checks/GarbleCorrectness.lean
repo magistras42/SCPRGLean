@@ -3,7 +3,7 @@ open PRG
 
 -- LM18 Theorem 4 checked by evaluation on small circuits.  `notC`, `andC` and `orC` all
 -- contain `Dup`, so the PRG path in both `Gb` and `GEv` is exercised.
--- Run with:  lake env lean scratch/GarbleCorrectness.lean
+-- Run with:  lake env lean scratch/checks/GarbleCorrectness.lean
 --
 -- NB: `Circuits.lean` declares `notation "(" o1 "," o2 ")"` for `WireBundle.PairB`, which
 -- shadows ordinary tuple syntax in this file; hence the explicit `WireBundle.PairB`

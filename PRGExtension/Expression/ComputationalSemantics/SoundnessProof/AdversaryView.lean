@@ -6,7 +6,7 @@ import PRGExtension.Expression.ComputationalSemantics.RenamePreserves
 import PRGExtension.ComputationalIndistinguishability.Lemmas
 import PRGExtension.Expression.ComputationalSemantics.SoundnessProof.HidingOneKey
 import PRGExtension.Expression.ComputationalSemantics.SoundnessProof.HidingOnePrgSeed
-import PRGExtension.Expression.ComputationalSemantics.PrgSecurity
+import PRGExtension.Expression.ComputationalSemantics.Games
 
 import PRGExtension.Core.Fixpoints
 import Mathlib.Probability.Distributions.Uniform
@@ -107,7 +107,7 @@ def expressionRecovery {s : Shape} (p : Expression s) : Expression s :=
   key-recovery function `r` (now implemented, see `keyRecovery`).  It is carried as an
   explicit hypothesis rather than proved because `Roots(Keys(e)) ⊆ 𝐊` is **not** preserved
   by the greatest-fixpoint iteration: hiding can bury an atomic key `K` inside a payload
-  while `G0(K)` survives as an encryption key.  `scratch/TwoGateFixpoint.lean` exhibits
+  while `G0(K)` survives as an encryption key.  `scratch/probes/TwoGateFixpoint.lean` exhibits
   exactly that on a two-gate garbled circuit.  Discharging it in general is LM18
   Lemma 2 / Theorem 1 (pseudorandom key renaming), which is future work.
 -/
@@ -153,12 +153,12 @@ def symbolicToSemanticIndistinguishabilityHidingInnerMotive (z : Finset (Express
   (_HPrgSecure : prgSchemeSecure IsPolyTime prg)
   {shape : Shape} (expr : Expression shape)
   (_HexprZ : ((extractKeys expr) ∩ z = ∅))
-  -- LM18 Lemma 3, property 1: every key we are about to hide is atomic.  Under the
+  -- LM18 Lemma 4 (atomicity): every key we are about to hide is atomic.  Under the
   -- corrected `keyRecovery` this follows from `Roots(Keys(e)) ⊆ 𝐊`; it is carried as an
   -- explicit side condition because that premise is *not* preserved by the fixpoint
-  -- iteration (see PRGExtension-Analysis.md §4.3 and scratch/TwoGateFixpoint.lean).
+  -- iteration (see PRGExtension-Analysis.md §4.3 and scratch/probes/TwoGateFixpoint.lean).
   (_Hatomic : ∀ k ∈ z, ∃ n : ℕ, k = Expression.VarK n)
-  -- LM18 Lemma 3, property 3: none of the keys being hidden is a PRG seed of `expr`.
+  -- LM18 Lemma 6, property 1 (seed-freeness): none of the keys being hidden is a PRG seed of `expr`.
   (_Hseed : ∀ n : ℕ, Expression.VarK n ∈ z → seedFree n expr),
    CompIndistinguishabilityDistr IsPolyTime (famDistrLift (exprToFamDistr enc prg expr)) (famDistrLift (exprToFamDistr enc prg (hideSelectedS z expr)))
 
@@ -440,7 +440,7 @@ theorem symbolicToSemanticIndistinguishabilityAdversaryView
 
   This is the only thing the adversary-view argument needs.  The version proved above
   discharges it from `hidingSideCondition`, which holds on the PRG-free fragment but
-  **not** for PRG garbled circuits (`scratch/GarbleSideCondition.lean`): at an intermediate
+  **not** for PRG garbled circuits (`scratch/probes/GarbleSideCondition.lean`): at an intermediate
   stage the keys being hidden include `G0 K₅`, `G1 K₅`, whose root `K₅` has itself been
   hidden, so `Roots(Keys(view)) ⊄ 𝐊`.
 

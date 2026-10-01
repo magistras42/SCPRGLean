@@ -265,7 +265,7 @@ def testGarbleEval {s t : WireBundle} (c : Circuit s t) (x : bundleBool s) : Opt
 /--
   **LM18 Theorem 4 (correctness).**  `GEval(C, Garble(C,x)) = C(x)`.
 
-  Written as a named proposition; `scratch/GarbleCorrectness.lean` checks it by `#eval` on
+  Written as a named proposition; `scratch/checks/GarbleCorrectness.lean` checks it by `#eval` on
   every input of several small circuits, including ones with `Dup` (so the PRG path in both
   `Gb` and `GEv` is exercised).
 -/

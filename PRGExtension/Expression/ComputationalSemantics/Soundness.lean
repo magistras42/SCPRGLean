@@ -4,13 +4,13 @@ import PRGExtension.Expression.Lemmas.HideEncrypted
 import PRGExtension.Expression.ComputationalSemantics.Def
 import PRGExtension.ComputationalIndistinguishability.Def
 
-import PRGExtension.Expression.ComputationalSemantics.EncryptionIndCpa
-import PRGExtension.Expression.ComputationalSemantics.PrgSecurity
+import PRGExtension.Expression.ComputationalSemantics.Games
+import PRGExtension.Expression.ComputationalSemantics.Games
 import PRGExtension.ComputationalIndistinguishability.Lemmas
 import PRGExtension.Expression.ComputationalSemantics.SoundnessProof.HidingOneKey
 import PRGExtension.Expression.ComputationalSemantics.SoundnessProof.AdversaryView
 import PRGExtension.Expression.ComputationalSemantics.SoundnessProof.FixpointStep
-import PRGExtension.Expression.ComputationalSemantics.PolyTime
+import PRGExtension.Expression.ComputationalSemantics.Efficiency.PolyTime
 
 import PRGExtension.Core.Fixpoints
 import Mathlib.Probability.Distributions.Uniform
@@ -18,7 +18,11 @@ import Mathlib.Probability.Distributions.Uniform
 import Mathlib.Data.Finset.SDiff
 
 /-!
-# LM18 Theorem 1: symbolic soundness
+# LM18 Theorem 3: symbolic soundness
+
+(Numbering follows Li--Micciancio, CSF 2018, ePrint 2018/141.  Earlier revisions of this
+development cited this result as "Theorem 1"; Theorem 1 there is the independent-keys
+characterisation, which is used separately in `SoundnessProof/HidingOnePrgSeed.lean`.)
 
 The bridge between the two halves of the development: if two expressions are *symbolically*
 indistinguishable, then their computational semantics are computationally indistinguishable.
@@ -30,7 +34,7 @@ hides everything the adversary cannot recover — discharging each by a reductio
 
 `symbolicToSemanticSoundnessFromEfficiency` is the same theorem with the PRG reduction's
 efficiency derived rather than assumed.  For the version in which *every* efficiency claim
-about the reductions is discharged, see `Garbling/SecurityFromPrimitives.lean`.
+about the reductions is discharged, see `Garbling/Security/SecurityFromPrimitives.lean`.
 -/
 
 -- This file proves the soundness theorem: if two expressions are symbolically indistinguishable, then their computational semantics (distributions over bitstrings)  are computationally indistinguishable. The technical details of this proof are in `SoundnessProof/`.
@@ -106,7 +110,7 @@ theorem symbolicToSemanticIndistinguishability
   (HEncIndCpa : encryptionSchemeIndCpa (fun {_ _ _} => IsPolyTime) enc)
   (HPrgSecure : prgSchemeSecure (fun {_ _ _} => IsPolyTime) prg)
   {shape : Shape} (expr1 expr2 : Expression shape)
-  -- Side condition, see `hidingSideCondition` (LM18 Lemma 3, property 1).  Discharging it
+  -- Side condition, see `hidingSideCondition` (LM18 Lemma 4 (atomicity)).  Discharging it
   -- in general requires LM18 Lemma 2 / Theorem 1 (pseudorandom key renaming), which is
   -- not yet formalised; it holds whenever `Roots(Keys(·)) ⊆ 𝐊` at every stage of the
   -- fixpoint.  It is vacuously satisfiable for PRG-free expressions.
@@ -169,7 +173,7 @@ theorem symbolicToSemanticIndistinguishabilityAtomic
 -- at *every* stage of the fixpoint, for a single globally-renamed `e'`.  That is not
 -- satisfiable once the expression has any PRG structure: some `S` hides the atomic root of
 -- a key chain away, leaving a non-atomic root behind, exactly as
--- `scratch/GarbleSideCondition.lean` exhibits.  A hypothesis nothing can satisfy makes the
+-- `scratch/probes/GarbleSideCondition.lean` exhibits.  A hypothesis nothing can satisfy makes the
 -- theorem vacuous, which is the same defect as the `prgSchemeSecure` bug fixed earlier.
 --
 -- The atomicisation has to happen *per fixpoint step*, not once globally.  The obligation
@@ -211,7 +215,7 @@ theorem symbolicToSemanticIndistinguishabilityOfStep
 
   Symbolically indistinguishable expressions have computationally indistinguishable
   semantics, given only IND-CPA security of the encryption scheme and security of the PRG.
-  This is LM18 Theorem 1 for the PRG-extended algebra: `fixpointStepSound` discharges the
+  This is LM18 Theorem 3 for the PRG-extended algebra: `fixpointStepSound` discharges the
   last obligation, so the theorem now carries no `hidingSideCondition` and no atomicity
   hypothesis.
 -/

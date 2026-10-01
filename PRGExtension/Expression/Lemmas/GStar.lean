@@ -26,7 +26,7 @@ This file discharges the two claims that were previously only argued in prose:
   pattern, which is all that `symIndistinguishable` compares, is the paper's.
 
 What remains genuinely different is membership for keys that do **not** occur in `p`, and
-that difference is real rather than hypothetical: `scratch/DupTrailing.lean` computes
+that difference is real rather than hypothetical: `scratch/probes/DupTrailing.lean` computes
 `Garble Dup true`, whose `keySubterms` is `{K₁}` while its output labels are
 `(b, G0 K₀, G0 K₁)` and `(b, G1 K₀, G1 K₁)`.  LM18 recovers exactly one key of each pair;
 the bounded closure recovers neither.  That is why `LabelInvariant S` had to be relativised
@@ -166,7 +166,7 @@ lemma hideEncryptedS_congr_allParts {s : Shape} (A B : Set (Expression Shape.Key
   indistinguishability compares — is the paper's, and the divergence between the two closures
   is confined to membership queries about keys that do not occur in `p`.
 
-  (Those queries are not vacuous: `scratch/DupTrailing.lean` exhibits a trailing `Dup` whose
+  (Those queries are not vacuous: `scratch/probes/DupTrailing.lean` exhibits a trailing `Dup` whose
   output-label keys occur nowhere, so LM18 recovers one key of each pair and the bounded
   closure recovers neither.  That is why `LabelInvariant` had to be relativised to
   `LabelInvariantIn U S`.)

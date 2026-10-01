@@ -1,2 +1,22 @@
 .lake
 SymbolicGarbledCircuitsInLean/
+report.md
+CHANGELOG.md
+CHECKPOINT.md
+FUTURE-WORK.md
+*.md
+*.tex
+# Haskell build artifacts (scratch/findings/symgc)
+*.hi
+*.o
+.ghc.environment.*
+scratch/findings/symgc/det
+
+# LaTeX build artifacts (writeup.tex / summary.tex)
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
+writeup.pdf
+summary.pdf

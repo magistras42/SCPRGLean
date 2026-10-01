@@ -285,7 +285,7 @@ def LabelInvariant (S : Finset (Expression Shape.KeyS)) :
   tests keys occurring in `e` — but it changes membership for keys that do not occur, and
   the unrelativised invariant quantifies over exactly those.
 
-  Concretely (`scratch/DupTrailing.lean`): for `Garble Dup true` the whole expression has
+  Concretely (`scratch/probes/DupTrailing.lean`): for `Garble Dup true` the whole expression has
   key set `{K₁}`, while the output labels are `(b,(G0 K₀, G0 K₁))` and `(b,(G1 K₀, G1 K₁))`.
   In LM18, `S = 𝖦*({K₁} ∪ …)` contains `G0 K₁` but not `G0 K₀`, so exactly one of the pair
   is in `S` and the invariant holds.  With the bounded closure `G0 K₁ ∉ S` either, so

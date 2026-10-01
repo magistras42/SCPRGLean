@@ -7,7 +7,66 @@ import VCVio2.VCVio.OracleComp.OracleComp
 import VCVio2.VCVio.OracleComp.SimSemantics.SimulateQ
 
 /-!
-# PRG security
+# The two primitive security games
+
+`encryptionSchemeIndCpa` and `prgSchemeSecure`: the only two cryptographic assumptions the
+development makes.  Both are stated in the same shape — a pair of seeded oracles that the
+ambient adversary class cannot tell apart — and both place their randomness in the **seed**
+rather than in the query implementation, for the reason recorded under the PRG game below.
+
+They were two files (`EncryptionIndCpa.lean`, `PrgSecurity.lean`) until they were merged here:
+144 lines between them, always imported together, and the seed-placement argument is one
+argument told twice.
+-/
+
+namespace PRG
+
+/-!
+## IND-CPA security for the encryption scheme
+
+The left-or-right formulation, as a seeded oracle.  `oracleSpecIndCpa` indexes queries by
+message length; a query carries a *pair* of messages and the oracle answers with an
+encryption of one of them under a key drawn once and held in the seed.
+`encryptionSchemeIndCpa` says the `Side.L` and `Side.R` oracles are indistinguishable to the
+ambient adversary class.
+
+`indCpaOracleImpl` is stateless by construction, with the key in `famSeededOracle.Seed`.  That
+placement matters: an implementation sampling fresh randomness per query would answer repeated
+queries independently and be trivially distinguishable.  See `CHANGELOG.md [2026-09-16]` for
+exactly that bug in the PRG oracle below.
+-/
+
+def oracleSpecIndCpa (κ : ℕ) (enc : encryptionFunctions κ) : OracleSpec ℕ :=
+  fun n => ((BitVector n)×(BitVector n), BitVector (enc.encryptLength n))
+
+inductive Side : Type
+  | L
+  | R
+
+def choose (w : Side) (x : X × X) : X :=
+  match w with
+  | Side.L => x.1
+  | Side.R => x.2
+
+noncomputable
+def indCpaOracleImpl (w : Side) (κ : ℕ) (enc : encryptionFunctions κ)  (key : BitVector κ) : QueryImpl (oracleSpecIndCpa κ enc) (OptionT PMF) := {
+  impl query :=
+  let OracleSpec.query msg_len ⟨msg₁, msg₂⟩ := query
+  enc.encrypt key (choose w (msg₁, msg₂))
+}
+
+noncomputable
+def seededIndCpaOracleImpl (w : Side) (enc : encryptionScheme) : famSeededOracle (fun κ ↦ oracleSpecIndCpa κ (enc κ)) := {
+  Seed κ := BitVector κ,
+  seedDistr κ := PMF.uniformOfFintype (BitVector κ),
+  queryImpl κ key := indCpaOracleImpl w κ (enc κ) key
+}
+
+def encryptionSchemeIndCpa (IsPolyTime : PolyFamOracleCompPred) (enc : encryptionScheme)  : Prop :=
+  CompIndistinguishabilitySeededOracle IsPolyTime (seededIndCpaOracleImpl Side.L enc) (seededIndCpaOracleImpl Side.R enc)
+
+/-!
+## PRG security
 
 The real-versus-ideal formulation, as a seeded oracle.  The real oracle draws a κ-bit seed and
 answers every query with `(prg0 seed, prg1 seed)`; the ideal oracle draws a uniform 2κ-bit
@@ -22,10 +81,8 @@ and every theorem assuming it vacuous.  See `CHANGELOG.md [2026-09-16]`.
 Worth knowing: PRG security, not IND-CPA, is the hypothesis that actually constrains the
 adversary class.  It is information-theoretically false against unbounded adversaries, since
 `(prg0 s, prg1 s)` covers at most `2 ^ κ` of `2 ^ (2 * κ)` points.  IND-CPA is not — a
-degenerate scheme satisfies it against *every* class (`scratch/DegenerateEnc.lean`).
+degenerate scheme satisfies it against *every* class (`scratch/archive/DegenerateEnc.lean`).
 -/
-
-namespace PRG
 
 -- The oracle takes a Unit (no meaningful input) and returns a pair of κ-bit strings
 def oracleSpecPrg (κ : ℕ) : OracleSpec Unit :=

@@ -3,8 +3,8 @@ import PRGExtension.Expression.ComputationalSemantics.Def
 import PRGExtension.Expression.SymbolicIndistinguishability
 import PRGExtension.Expression.Lemmas.HideEncrypted
 import PRGExtension.ComputationalIndistinguishability.Lemmas
-import PRGExtension.Expression.ComputationalSemantics.EncryptionIndCpa
-import PRGExtension.Expression.ComputationalSemantics.PrgSecurity
+import PRGExtension.Expression.ComputationalSemantics.Games
+import PRGExtension.Expression.ComputationalSemantics.Games
 
 /-!
 # Idealising one PRG seed, and its reduction

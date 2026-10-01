@@ -1,4 +1,4 @@
-import PRGExtension.Expression.ComputationalSemantics.GeneratedPolyTime
+import PRGExtension.Expression.ComputationalSemantics.Efficiency.GeneratedPolyTime
 
 /-!
 # Finding F6, preserved as a demonstration
@@ -17,7 +17,7 @@ oracle computation that *queries for its input* and then runs `f`.  Under that d
   inversion of `PolyFn` on a term whose constructors are Lean functions.
 
 The second case is reproduced below against the *old* encoding, with `sorry` marking exactly
-where it stops.  Run with `lake env lean scratch/GenClass.lean`.
+where it stops.  Run with `lake env lean scratch/archive/GenClass.lean`.
 -/
 
 namespace PRG

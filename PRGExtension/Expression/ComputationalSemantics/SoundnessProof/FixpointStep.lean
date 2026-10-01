@@ -8,7 +8,7 @@ import PRGExtension.Expression.ComputationalSemantics.SoundnessProof.HidingOneKe
 `AdversaryView.lean` needed `hidingSideCondition` — "every key the step hides is atomic" —
 which holds on the PRG-free fragment but **not** for PRG garbled circuits: at an
 intermediate stage of the fixpoint the keys being hidden can include `G0 K₅` whose root
-`K₅` has itself been hidden away (`scratch/GarbleSideCondition.lean`).
+`K₅` has itself been hidden away (`scratch/probes/GarbleSideCondition.lean`).
 
 This file removes that hypothesis, following LM18 Lemma 3's general case.  `hidingGen` is
 the set-level hiding theorem with the atomicity requirement replaced by two conditions read

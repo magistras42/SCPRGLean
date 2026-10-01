@@ -4,8 +4,10 @@ import PRGExtension.Expression.SymbolicIndistinguishability
 /-!
 # Replacing subterms by holes
 
-`hideEncryptedS keys p` replaces every subterm of `p` encrypted under a key in `keys` by a
-`Hidden` node — the syntactic operation the entire hiding argument is about.  `hideSelectedS`
+`hideEncryptedS keys p` **keeps** every subterm of `p` encrypted under a key in `keys` and
+replaces the rest by `Hidden` nodes.  `keys` is what the adversary *can* decrypt, so this is
+LM18's pattern function `𝐩(e, S)` verbatim: `𝐩(⦃e⦄ₖ, S) = ⦃𝐩(e,S)⦄ₖ` when `k ∈ S`, and `⦃s⦄ₖ`
+otherwise.  `hideSelectedS`
 is the variant the reductions use.
 
 `allParts` collects the key subterms a key expression is built from;

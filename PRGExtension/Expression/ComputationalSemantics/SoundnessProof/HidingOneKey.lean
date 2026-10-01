@@ -3,7 +3,7 @@ import PRGExtension.Expression.ComputationalSemantics.Def
 import PRGExtension.Expression.SymbolicIndistinguishability
 import PRGExtension.Expression.Lemmas.HideEncrypted
 import PRGExtension.ComputationalIndistinguishability.Lemmas
-import PRGExtension.Expression.ComputationalSemantics.EncryptionIndCpa
+import PRGExtension.Expression.ComputationalSemantics.Games
 
 /-!
 # LM18's one-key hiding step, and its IND-CPA reduction
@@ -386,7 +386,7 @@ lemma reductionToOracleSimulateEq' {κ : ℕ} (enc : encryptionFunctions κ) (pr
 lemma reductionToOracleSimulateEq {κ : ℕ} (enc : encryptionFunctions κ) (prg : prgFunctions κ) (kVars : (ℕ -> BitVector κ)) (bVars : ℕ -> Bool)
   {shape : Shape} (e : Expression shape) (key₀ : ℕ) (oracleKey : BitVector κ)
   (H : (Expression.VarK key₀) ∉ extractKeys e)
-  -- LM18 Lemma 3, property 3.  Without it the statement is FALSE: for
+  -- LM18 Lemma 6, property 1 (seed-freeness).  Without it the statement is FALSE: for
   -- `e = G0 (VarK key₀)` the hypothesis `H` holds (extractKeys e = {G0 (VarK key₀)})
   -- while the reduction computes `prg0 (kVars key₀)` and `evalExpr` computes
   -- `prg0 oracleKey`.  See CHANGELOG 2026-09-16 / PRGExtension-Analysis.md §4.2.
@@ -911,7 +911,7 @@ lemma reductionToOracleSimulateEq2' {κ : ℕ} (enc : encryptionFunctions κ) (p
 lemma reductionToOracleSimulateEq2 {κ : ℕ} (enc : encryptionFunctions κ) (prg : prgFunctions κ) (kVars : (ℕ -> BitVector κ)) (bVars : ℕ -> Bool)
   {shape : Shape} (e : Expression shape) (key₀ : ℕ) (oracleKey : BitVector κ)
   (H : (Expression.VarK key₀) ∉ extractKeys e)
-  -- LM18 Lemma 3, property 3.  Without it the statement is FALSE: for
+  -- LM18 Lemma 6, property 1 (seed-freeness).  Without it the statement is FALSE: for
   -- `e = G0 (VarK key₀)` the hypothesis `H` holds (extractKeys e = {G0 (VarK key₀)})
   -- while the reduction computes `prg0 (kVars key₀)` and `evalExpr` computes
   -- `prg0 oracleKey`.  See CHANGELOG 2026-09-16 / PRGExtension-Analysis.md §4.2.
@@ -1304,22 +1304,9 @@ lemma reductionToOracleEq2 (key₀ : ℕ) (enc : encryptionScheme) (prg : prgSch
       simp [removeOneKey, hideKeys2SmallerValue]
     omega
 
--- theorem symbolicToSemanticIndistinguishabilityHidingOneKey
---   (IsPolyTime : PolyFamOracleCompPred) (HPolyTime : PolyTimeClosedUnderComposition IsPolyTime)
---   (Hreduction : forall enc prg shape (expr : Expression shape) key₀, IsPolyTime (reductionHidingOneKey enc prg expr key₀))
---   (enc : encryptionScheme) (HEncIndCpa : encryptionSchemeIndCpa IsPolyTime enc)
---   {shape : Shape} (expr : Expression shape)
---   (k : Expression Shape.KeyS) (Hk : k ∉ extractKeys expr)
---   : CompIndistinguishabilityDistr IsPolyTime (famDistrLift (exprToFamDistr enc prg expr)) (famDistrLift (exprToFamDistr enc prg (removeOneKey k expr)))
---   := by
---     cases k
---     case VarK key₀ =>
---       rw [<-reductionToOracleEq key₀] <;> try assumption
---       rw [<-reductionToOracleEq2 key₀] <;> try assumption
---       apply IndistinguishabilityByReduction <;> try assumption
---       apply Hreduction
---     case G0 => sorry
---     case G1 => sorry
+-- An earlier version of the theorem below quantified over all key shapes and left the `G0`/`G1`
+-- cases as `sorry`.  Deleted 2026-09-29; the live theorem restricts to base keys `VarK key₀`,
+-- which is what the soundness proof actually needs and what LM18's Lemma 6 supplies.
 
 theorem symbolicToSemanticIndistinguishabilityHidingOneKey
   (IsPolyTime : PolyFamOracleCompPred) (HPolyTime : PolyTimeClosedUnderComposition IsPolyTime)
@@ -1329,7 +1316,7 @@ theorem symbolicToSemanticIndistinguishabilityHidingOneKey
   {shape : Shape} (expr : Expression shape)
   -- CHANGE HERE: We restrict the theorem to base keys (key₀ : ℕ)
   (key₀ : ℕ) (Hk : Expression.VarK key₀ ∉ extractKeys expr)
-  -- LM18 Lemma 3, property 3: `key₀` is never used as a PRG seed in `expr`.  Mandatory:
+  -- LM18 Lemma 6, property 1 (seed-freeness): `key₀` is never used as a PRG seed in `expr`.  Mandatory:
   -- the IND-CPA reduction never learns `key₀`, so it could not compute `prg0 key₀`.
   (Hseed : seedFree key₀ expr)
   : CompIndistinguishabilityDistr IsPolyTime (famDistrLift (exprToFamDistr enc prg expr)) (famDistrLift (exprToFamDistr enc prg (removeOneKey (Expression.VarK key₀) expr)))
@@ -1405,12 +1392,15 @@ The length of the bit vector produced by `reductionToOracle` depends only on the
 • Encryption case: s = EncS s′.
   Since encrypt(k, n) runs in time p(n + κ), its output length is also bounded by p(n + κ).
 
-  [2026-09-18c] THIS STEP IS WRONG AS STATED.  `encryptLength` is an arbitrary `ℕ → ℕ` and
-  is not tied to the running time of `encrypt` by anything in the types, so the inference
-  "runs in time p(n + κ), therefore outputs at most p(n + κ) bits" has no formal content
-  here.  Take `encryptLength n = 2 ^ n` and the bound fails outright.  The repaired statement
-  assumes the length bound directly — `LengthPoly enc`, LM18 Definition 1's length half — and
-  the rest of this induction goes through verbatim; see `PRG.shapeLength_poly`.
+  [2026-09-18c, refined 2026-09-22] THIS STEP DOES NOT GO THROUGH IN *THIS* MODEL.  The
+  inference "runs in time p(n + κ), therefore outputs at most p(n + κ) bits" is perfectly
+  valid in LM18, whose Definition 2 requires `(E, D)` to be **PPT algorithms** — output length
+  is bounded by running time.  It fails here because `encryptionFunctions` dropped that
+  requirement: `encrypt` is an arbitrary `PMF`-valued function and `encryptLength` an
+  arbitrary `ℕ → ℕ`, so `encryptLength n = 2 ^ n` is a legal scheme.  A formalisation gap,
+  then, not an error in the paper.  The repair assumes the length bound directly —
+  `LengthPoly enc` — and the rest of this induction goes through verbatim; see
+  `PRG.shapeLength_poly`.
 
   Here n is the length of the bit vector produced by s′, which by the induction hypothesis
   is bounded by q(κ) for some polynomial q.
@@ -1486,7 +1476,7 @@ therefore a theorem rather than a hypothesis.
 [2026-09-18c] The remaining hypothesis of `reductionToPrgOracle_polyTime` — efficiency of the
 sampling prefix itself — is now discharged too, by `PRG.prgEnvSampler_polyTime`, and
 `EfficientEvalPrg` follows from LM18 Definition 1 by
-`PRG.evalEfficiencyFromPrimitives_holds`.  See `Garbling/SecurityFromPrimitives.lean` for the
+`PRG.evalEfficiencyFromPrimitives_holds`.  See `Garbling/Security/SecurityFromPrimitives.lean` for the
 security theorem with all of this composed.
 -/
 

@@ -29,7 +29,7 @@ assigning values to the key and bit variables.
 * `encryptionFunctions` / `encryptionScheme`, `prgFunctions` / `prgScheme` — the primitives.
   Note that `encryptionFunctions` relates `encrypt` and `decrypt` by **nothing**: there is no
   correctness field, so a scheme whose ciphertext ignores the message is legal.  That is not
-  hypothetical — `scratch/DegenerateEnc.lean` uses one to show that IND-CPA alone places no
+  hypothetical — `scratch/archive/DegenerateEnc.lean` uses one to show that IND-CPA alone places no
   constraint on the adversary class.
 * `shapeLength` — the length of the bit vector a shape produces.
 * `PolyLength`, `LengthPoly`, `shapeLength_poly` — LM18 Definition 1's *length* half.  Without
@@ -58,7 +58,7 @@ structure encryptionFunctions (κ : ℕ) where
   decrypt : {n : ℕ} -> (key : BitVector κ) -> (msg : BitVector (encryptLength n)) -> BitVector n
   /-- **Decryption inverts encryption** (`CHECKPOINT.md` §3.2, F9).  Without this the two
   fields are unrelated, and then: a scheme whose ciphertext ignores the message is legal (so
-  IND-CPA constrains nothing — `scratch/DegenerateEnc.lean`), and no *computational*
+  IND-CPA constrains nothing — `scratch/archive/DegenerateEnc.lean`), and no *computational*
   correctness statement is reachable, because the symbolic evaluator's `decrypt` has no
   computational counterpart to agree with. -/
   decrypt_encrypt : ∀ {n : ℕ} (key : BitVector κ) (msg : BitVector n),
@@ -73,13 +73,23 @@ structure prgFunctions (κ : ℕ) where
 
 def prgScheme : Type := (κ : ℕ) -> prgFunctions κ
 
-def shapeLength (κ : ℕ) (scheme : encryptionFunctions κ) (s : Shape) : ℕ :=
+/-- The length a shape denotes, as a function of the **ciphertext-length function alone**.
+
+`shapeLength` is this at `scheme.encryptLength`, and the two are *delta*-equal, which matters
+for more than tidiness: an executable implementation must compute these lengths at run time
+(`vecTake` / `vecDrop` take them as data), and no concrete `encryptionFunctions` is computable,
+since `encrypt` is `PMF`-valued.  Phrased this way, the executable layer computes its lengths
+from data it has — see `ComputationalSemantics/Executable.lean`. -/
+def shapeLengthOn (κ : ℕ) (encLen : ℕ → ℕ) (s : Shape) : ℕ :=
   match s with
   | Shape.BitS => 1
   | Shape.KeyS => κ
   | Shape.EmptyS => 0
-  | Shape.PairS s₁ s₂ => (shapeLength κ scheme s₁) + (shapeLength κ scheme s₂)
-  | Shape.EncS s => scheme.encryptLength (shapeLength κ scheme s)
+  | Shape.PairS s₁ s₂ => (shapeLengthOn κ encLen s₁) + (shapeLengthOn κ encLen s₂)
+  | Shape.EncS s => encLen (shapeLengthOn κ encLen s)
+
+def shapeLength (κ : ℕ) (scheme : encryptionFunctions κ) (s : Shape) : ℕ :=
+  shapeLengthOn κ scheme.encryptLength s
 
 /-!
 ### Ciphertext growth: the length half of LM18 Definition 1
@@ -91,7 +101,7 @@ and no cost analysis of the reductions can succeed — the pen-and-paper argumen
 of `SoundnessProof/HidingOneKey.lean` silently assumes this away when it says "since
 `encrypt (k, n)` runs in time `p (n + κ)`, its output length is also bounded by `p (n + κ)`".
 
-LM18 Definition 1 rules it out implicitly, by demanding polynomial-*time* encryption.
+LM18 Definition 2 rules it out implicitly, by requiring `E` and `D` to be PPT algorithms.
 `LengthPoly` states the length consequence explicitly, and `shapeLength_poly` is the form
 every later cost argument actually consumes.
 
@@ -199,9 +209,14 @@ def prod {D E : ℕ → Type} (hD : PolySized D) (hE : PolySized E) :
 
 end PolySized
 
-/-- **LM18 Definition 1, length half**: ciphertexts grow polynomially in the message length
-and the security parameter.  Required of any scheme for which the efficiency analysis of the
-reductions is meaningful. -/
+/-- **What LM18 Definition 2 gives for free, and this model does not.**
+
+LM18 requires `(E, D)` to be **PPT algorithms**, so a ciphertext's length is bounded by the
+encryption algorithm's running time and is automatically polynomial.  `encryptionFunctions`
+instead takes `encrypt` to be an arbitrary `PMF`-valued function with an unconstrained
+`encryptLength`, so that consequence is lost and has to be assumed back.
+
+(Definition 1 is the *pseudorandom generator*; it is what `EfficientPrg` comes from.) -/
 def LengthPoly (enc : encryptionScheme) : Prop :=
   ∃ p : Polynomial ℕ, ∀ κ n, (enc κ).encryptLength n ≤ p.eval (n + κ)
 
@@ -225,19 +240,19 @@ theorem shapeLength_poly (enc : encryptionScheme) (H : LengthPoly enc) (s : Shap
   unfold PolyLength
   obtain ⟨p, hp⟩ := H
   induction s with
-  | BitS => exact ⟨1, by simp [shapeLength]⟩
-  | KeyS => exact ⟨Polynomial.X, by simp [shapeLength]⟩
-  | EmptyS => exact ⟨0, by simp [shapeLength]⟩
+  | BitS => exact ⟨1, by simp [shapeLength, shapeLengthOn]⟩
+  | KeyS => exact ⟨Polynomial.X, by simp [shapeLength, shapeLengthOn]⟩
+  | EmptyS => exact ⟨0, by simp [shapeLength, shapeLengthOn]⟩
   | PairS s₁ s₂ ih₁ ih₂ =>
       obtain ⟨q₁, h₁⟩ := ih₁
       obtain ⟨q₂, h₂⟩ := ih₂
       exact ⟨q₁ + q₂, fun κ => by
-        simpa [shapeLength] using Nat.add_le_add (h₁ κ) (h₂ κ)⟩
+        simpa [shapeLength, shapeLengthOn] using Nat.add_le_add (h₁ κ) (h₂ κ)⟩
   | EncS s ih =>
       obtain ⟨q, h⟩ := ih
       -- `p (q κ + κ)`: the prose's `p (q (κ) + κ)`.
       refine ⟨p.comp (q + Polynomial.X), fun κ => ?_⟩
-      simp only [shapeLength, Polynomial.eval_comp, Polynomial.eval_add, Polynomial.eval_X]
+      simp only [shapeLength, shapeLengthOn, Polynomial.eval_comp, Polynomial.eval_add, Polynomial.eval_X]
       exact le_trans (hp κ _) (polyEvalMono (Nat.add_le_add_right (h κ) κ))
 
 def allVarsSmallerThanBExpr (e : BitExpr) (n : ℕ ) : Prop :=
@@ -407,6 +422,17 @@ def evalBitExpr (bVars : ℕ -> Bool) (e : BitExpr) : Bool :=
 
 def ones {k : ℕ} := List.Vector.replicate k true
 
+/-- Build a bit vector from a function on indices.
+
+**Not** `List.Vector.ofFn`, which is quadratic: its recursion is
+`ofFn f = cons (f 0) (ofFn fun i => f i.succ)`, so each element is reached through one more
+closure than the last.  `List.ofFn` is linear, and bit vectors here are thousands of bits long.
+-/
+def bvOfFn {n : ℕ} (f : Fin n → Bool) : BitVector n := ⟨List.ofFn f, by simp⟩
+
+@[simp] theorem bvOfFn_get {n : ℕ} (f : Fin n → Bool) (i : Fin n) : (bvOfFn f).get i = f i := by
+  simp [bvOfFn, List.Vector.get]
+
 noncomputable
 def evalExpr (enc : encryptionFunctions κ) (prg : prgFunctions κ) (kVars : ℕ -> BitVector κ) (bVars : ℕ -> Bool) (e : Expression s) : PMF (BitVector (shapeLength κ enc s)) :=
   match e with
@@ -540,17 +566,32 @@ lemma get_append_right : ∀ {n m : ℕ} (a : BitVector n) (b : BitVector m)
       have := ih a' b i (by omega)
       simpa [List.Vector.get_append_cons_succ, Nat.succ_add] using this
 
-/-- The first `n` bits. -/
+/-- The first `n` bits.
+
+`List.take` on the underlying list, not `ofFn`+`get`.  The two agree, but `get` walks a cons
+cell at a time, so the `ofFn` version is quadratic — and these run on every ciphertext the
+computational evaluator takes apart, which made them the dominant cost of executing a garbling
+(`FUTURE-WORK.md`, the endpoint caveat). -/
 def vecTake {n m : ℕ} (v : BitVector (n + m)) : BitVector n :=
-  List.Vector.ofFn (fun i : Fin n => v.get ⟨i.val, by omega⟩)
-/-- The last `m` bits. -/
+  ⟨v.1.take n, by rw [List.length_take, v.2]; omega⟩
+/-- The last `m` bits.  `List.drop`, for the same reason. -/
 def vecDrop {n m : ℕ} (v : BitVector (n + m)) : BitVector m :=
-  List.Vector.ofFn (fun i : Fin m => v.get ⟨n + i.val, by omega⟩)
+  ⟨v.1.drop n, by rw [List.length_drop, v.2]; omega⟩
 
 @[simp] lemma vecTake_append {n m : ℕ} (a : BitVector n) (b : BitVector m) :
-    vecTake (a.append b) = a := by simp [vecTake, get_append_left]
+    vecTake (a.append b) = a := by
+  obtain ⟨la, ha⟩ := a
+  obtain ⟨lb, hb⟩ := b
+  apply Subtype.ext
+  subst ha
+  exact List.take_left
 @[simp] lemma vecDrop_append {n m : ℕ} (a : BitVector n) (b : BitVector m) :
-    vecDrop (a.append b) = b := by simp [vecDrop, get_append_right]
+    vecDrop (a.append b) = b := by
+  obtain ⟨la, ha⟩ := a
+  obtain ⟨lb, hb⟩ := b
+  apply Subtype.ext
+  subst ha
+  exact List.drop_left
 
 def extendFin {k : ℕ} (default : X) (x : Fin k -> X) :  (ℕ -> X) :=
   fun i =>
